@@ -128,6 +128,23 @@ def test_detector_emits_explainable_fused_shortage():
     # Check that merged assumptions list all contributing signals
     assert any("supply_friction" in a["assumptions"] for a in alerts)
 
+def test_unavailable_ratio_capped_at_one():
+    """Unavailable replies exceeding quote requests must report a share of at most 1.0 (100%)."""
+    rows = []
+    env = []
+    dates = pd.date_range("2026-01-01", periods=35)
+    for i, d in enumerate(dates):
+        for typ, val in [("catalog_search", 20 if i < 28 else 80), ("quote_request", 20),
+                        ("quote_unavailable", 2 if i < 28 else 30), ("alt_search_after_unavailable", 1)]:
+            rows.append({"date": d.date().isoformat(), "inn": "amlodipine", "therapeutic_class": "antihypertensives",
+                         "governorate": "Alexandria", "event_type": typ, "count": val, "suppressed": False})
+        env.append({"date": d.date().isoformat(), "governorate": "Alexandria", "tmax_c": 30, "pm25_ugm3": 20})
+    alerts = detect(pd.DataFrame(rows), pd.DataFrame(env), min_history=14)
+    ratios = [s["value"] for a in alerts for s in a["contributing_signals"] if s["unit"] == "unavailable_ratio"]
+    assert ratios, "expected a supply-friction signal"
+    assert max(ratios) == 1.0
+    assert all(0.0 <= r <= 1.0 for r in ratios)
+
 def test_past_only_baseline_no_lookahead():
     """Truncating future data must not change baseline or z-scores for past/current day t."""
     dates = pd.date_range("2026-01-01", periods=50, freq="D")

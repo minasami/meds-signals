@@ -171,7 +171,8 @@ def detect(aggregated: pd.DataFrame, environment: pd.DataFrame, min_history=14):
             else:
                 denom = row["catalog_search"] if pd.notna(row["catalog_search"]) else 1.0
 
-            unavailable_ratio = local_unavail / max(denom, 1.0)
+            # A share cannot exceed 100%: cap at 1.0 (unavailable and quote counts are aggregated separately)
+            unavailable_ratio = min(local_unavail / max(denom, 1.0), 1.0)
             raw_supply = bool(local_unavail >= 10 and unavailable_ratio >= 0.25)
             # Supply friction must persist (also present on at least one of the previous 2 evaluated days)
             supply = raw_supply and any(supply_hist[-2:])

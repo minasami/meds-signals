@@ -53,7 +53,7 @@ The pipeline runs as stateless batch steps that read and write CSV and JSON. It 
   - Scale is the MAD of past residuals × 1.4826, with a floor of 2.0.
   - No future data is used. A test checks this.
 - **Demand signal:** the `catalog_search` residual z-score is at least 2.8, **or** the one-sided CUSUM (slack 0.8) is at least 6.0.
-- **Supply friction:** the ratio `quote_unavailable / quote_request`.
+- **Supply friction:** the ratio `quote_unavailable / quote_request`, capped at 1.0 (100%). The two counts are aggregated separately, so without the cap the raw ratio could exceed 1. The cap changes no alert decisions, because every threshold is below 1.
   - It counts when the ratio is at least 0.25, the local unavailable count is at least 10, and it **persists**: present today and on at least one of the previous 2 evaluated days.
   - If the local quote-request cell is suppressed, the denominator falls back to a coarser aggregate that clears k=10 (the national INN count, then class × governorate).
   - These roll-ups are internal and are never shown.
