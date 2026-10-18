@@ -1,0 +1,68 @@
+{
+  "synthetic_only": true,
+  "seed": 20261018,
+  "date_start": "2026-07-01",
+  "date_end": "2026-09-28",
+  "scenarios": [
+    {
+      "id": "S1",
+      "label": "supply_shortage",
+      "inn": "amlodipine",
+      "governorates": [
+        "Alexandria",
+        "Dakahlia"
+      ],
+      "start": "2026-08-12",
+      "end": "2026-08-23",
+      "expected_type": "possible_shortage"
+    },
+    {
+      "id": "S2",
+      "label": "heatwave_ors_demand",
+      "therapeutic_class": "antidiarrhoeals_ors",
+      "governorates": [
+        "Cairo",
+        "Giza",
+        "Alexandria",
+        "Qalyubia",
+        "Dakahlia",
+        "Assiut"
+      ],
+      "start": "2026-08-20",
+      "end": "2026-08-26",
+      "expected_type": "unusual_demand"
+    },
+    {
+      "id": "S3",
+      "label": "media_false_spike",
+      "inn": "cetirizine",
+      "governorates": [
+        "Cairo",
+        "Giza",
+        "Alexandria",
+        "Qalyubia",
+        "Dakahlia",
+        "Assiut"
+      ],
+      "start": "2026-08-05",
+      "end": "2026-08-08",
+      "expected_type": "unusual_demand",
+      "note": "Search volume rises while synthetic unavailability remains at normal levels."
+    },
+    {
+      "id": "S4",
+      "label": "missing_data",
+      "dates": [
+        "2026-07-17",
+        "2026-08-02",
+        "2026-09-04"
+      ],
+      "governorates": [
+        "Assiut",
+        "Qalyubia"
+      ],
+      "expected_behavior": "avoid confident alerts from absent observations"
+    }
+  ],
+  "method_note": "All records and scenario labels are fabricated for demonstration; not operational evidence."
+}

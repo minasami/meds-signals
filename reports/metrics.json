@@ -1,0 +1,425 @@
+{
+  "scenario_sensitivity": 1.0,
+  "scenario_positive_count": 2,
+  "scenario_positive_detected": 2,
+  "series_sensitivity": 1.0,
+  "shortage_series_recall": "2/2",
+  "heatwave_series_recall": "30/30",
+  "alert_level_ppv_proxy": 1.0,
+  "false_alarms_per_30_days": 0.0,
+  "alert_count": 32,
+  "false_alarm_count": 0,
+  "media_spike_alerts_count": 0,
+  "missing_data_alerts_count": 0,
+  "missing_data_behavior": "Explicitly flagged missing rows are evaluated without emitting false alarms from absent observations.",
+  "caveat": "Honest multi-signal scenario backtest; negative controls evaluated. PPV and false-alarm figures reflect scenario-level synthetic labels.",
+  "scenario_results": [
+    {
+      "scenario_id": "S1",
+      "label": "supply_shortage",
+      "detected": true,
+      "matched_alert_count": 2,
+      "lead_time_days": 0,
+      "expected_type": "possible_shortage",
+      "observed_types": [
+        "possible_shortage"
+      ]
+    },
+    {
+      "scenario_id": "S2",
+      "label": "heatwave_ors_demand",
+      "detected": true,
+      "matched_alert_count": 30,
+      "lead_time_days": 0,
+      "expected_type": "unusual_demand",
+      "observed_types": [
+        "unusual_demand"
+      ]
+    },
+    {
+      "scenario_id": "S3",
+      "label": "media_false_spike",
+      "detected": false,
+      "matched_alert_count": 0,
+      "lead_time_days": null,
+      "expected_type": "none (negative control)",
+      "observed_types": [],
+      "note": "Negative control: media spike should not trigger alerts"
+    },
+    {
+      "scenario_id": "S4",
+      "label": "missing_data",
+      "detected": false,
+      "matched_alert_count": 0,
+      "lead_time_days": null,
+      "expected_type": "none (negative control)",
+      "observed_types": [],
+      "note": "Negative control: no confident alerts from missing observations"
+    }
+  ],
+  "multi_seed_evaluation": {
+    "seeds_evaluated": [
+      20261018,
+      1,
+      42,
+      7777,
+      99999
+    ],
+    "scenario_sensitivity": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "series_sensitivity": {
+      "mean": 0.9938,
+      "min": 0.9688,
+      "max": 1.0
+    },
+    "shortage_series_recall": {
+      "mean": 1.0,
+      "min": 1.0
+    },
+    "heatwave_series_recall": {
+      "mean": 0.9933,
+      "min": 0.9667
+    },
+    "alert_level_ppv_proxy": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "false_alarms_per_30_days": {
+      "mean": 0.0,
+      "max": 0.0
+    },
+    "media_spike_alerts_total": 0,
+    "missing_data_alerts_total": 0,
+    "per_seed_summary": {
+      "20261018": {
+        "alerts": 32,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "1": {
+        "alerts": 33,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "42": {
+        "alerts": 32,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "7777": {
+        "alerts": 31,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "29/30",
+        "media_alerts": 0
+      },
+      "99999": {
+        "alerts": 33,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      }
+    }
+  },
+  "tuning_evaluation": {
+    "seeds_evaluated": [
+      20261018,
+      1,
+      42,
+      7777,
+      99999
+    ],
+    "scenario_sensitivity": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "series_sensitivity": {
+      "mean": 0.9938,
+      "min": 0.9688,
+      "max": 1.0
+    },
+    "shortage_series_recall": {
+      "mean": 1.0,
+      "min": 1.0
+    },
+    "heatwave_series_recall": {
+      "mean": 0.9933,
+      "min": 0.9667
+    },
+    "alert_level_ppv_proxy": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "false_alarms_per_30_days": {
+      "mean": 0.0,
+      "max": 0.0
+    },
+    "media_spike_alerts_total": 0,
+    "missing_data_alerts_total": 0,
+    "per_seed_summary": {
+      "20261018": {
+        "alerts": 32,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "1": {
+        "alerts": 33,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "42": {
+        "alerts": 32,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "7777": {
+        "alerts": 31,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "29/30",
+        "media_alerts": 0
+      },
+      "99999": {
+        "alerts": 33,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      }
+    }
+  },
+  "holdout_evaluation": {
+    "seeds_evaluated": [
+      2,
+      3,
+      5,
+      8,
+      13
+    ],
+    "scenario_sensitivity": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "series_sensitivity": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "shortage_series_recall": {
+      "mean": 1.0,
+      "min": 1.0
+    },
+    "heatwave_series_recall": {
+      "mean": 1.0,
+      "min": 1.0
+    },
+    "alert_level_ppv_proxy": {
+      "mean": 0.9892,
+      "min": 0.9722,
+      "max": 1.0
+    },
+    "false_alarms_per_30_days": {
+      "mean": 0.1333,
+      "max": 0.3333
+    },
+    "media_spike_alerts_total": 0,
+    "missing_data_alerts_total": 0,
+    "per_seed_summary": {
+      "2": {
+        "alerts": 35,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "3": {
+        "alerts": 34,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "5": {
+        "alerts": 38,
+        "ppv": 0.9737,
+        "fa_30d": 0.3333,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "8": {
+        "alerts": 33,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "13": {
+        "alerts": 36,
+        "ppv": 0.9722,
+        "fa_30d": 0.3333,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      }
+    }
+  },
+  "combined_10_seed_evaluation": {
+    "seeds_evaluated": [
+      20261018,
+      1,
+      42,
+      7777,
+      99999,
+      2,
+      3,
+      5,
+      8,
+      13
+    ],
+    "scenario_sensitivity": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "series_sensitivity": {
+      "mean": 0.9969,
+      "min": 0.9688,
+      "max": 1.0
+    },
+    "shortage_series_recall": {
+      "mean": 1.0,
+      "min": 1.0
+    },
+    "heatwave_series_recall": {
+      "mean": 0.9967,
+      "min": 0.9667
+    },
+    "alert_level_ppv_proxy": {
+      "mean": 0.9946,
+      "min": 0.9722,
+      "max": 1.0
+    },
+    "false_alarms_per_30_days": {
+      "mean": 0.0667,
+      "max": 0.3333
+    },
+    "media_spike_alerts_total": 0,
+    "missing_data_alerts_total": 0,
+    "per_seed_summary": {
+      "20261018": {
+        "alerts": 32,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "1": {
+        "alerts": 33,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "42": {
+        "alerts": 32,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "7777": {
+        "alerts": 31,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "29/30",
+        "media_alerts": 0
+      },
+      "99999": {
+        "alerts": 33,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "2": {
+        "alerts": 35,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "3": {
+        "alerts": 34,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "5": {
+        "alerts": 38,
+        "ppv": 0.9737,
+        "fa_30d": 0.3333,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "8": {
+        "alerts": 33,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "13": {
+        "alerts": 36,
+        "ppv": 0.9722,
+        "fa_30d": 0.3333,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+.streamlit/secrets.toml
+.env
+data/events.csv
+data/aggregated.csv
+data/alerts.json
