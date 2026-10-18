@@ -81,7 +81,7 @@ st.subheader("Aggregate time series")
 metric = st.selectbox("Event type", ["catalog_search", "quote_request", "quote_unavailable", "alt_search_after_unavailable"])
 series = filtered[(filtered.event_type == metric) & (~filtered.suppressed.astype(bool))]
 if not series.empty:
-    ts = series.groupby(["date", "governorate"], as_index=False)["count"].sum()
+    ts = series.groupby(["date", "governorate"], as_index=False)["count"].sum(min_count=1)  # all-missing days stay NaN (gaps), not 0
     fig = px.line(ts, x="date", y="count", color="governorate", title=metric.replace("_", " ").title())
     for a in alerts:
         if (gov == "All" or a["governorate"] == gov) and (cls == "All" or a["therapeutic_class"] == cls):
