@@ -85,6 +85,30 @@
 | 8 | 33 | 2/2 | 30/30 | 0 | 100.0% | 0.00 |
 | 13 | 36 | 2/2 | 30/30 | 0 | 97.2% | 0.33 |
 
+## Fresh untouched hold-out (evaluated once, after tuning was frozen) (10 seeds: 100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+
+- Mean scenario sensitivity: 100.0% (min: 100.0%)
+- Mean series sensitivity: 99.4% (min: 96.9%)
+  - Mean shortage series recall: 100.0% (min: 100.0%)
+  - Mean heatwave series recall: 99.3% (min: 96.7%)
+- Mean PPV proxy: 99.4% (min: 97.0%)
+- Mean false alarms / 30d: 0.07 (max: 0.33)
+- Total media-spike false alarms: 0
+- Total missing-data false alarms: 0
+
+| Seed | Total alerts | Shortage series | Heatwave series | Media alerts | PPV proxy | False alarms / 30d |
+|---|---:|---:|---:|---:|---:|---:|
+| 100 | 35 | 2/2 | 30/30 | 0 | 100.0% | 0.00 |
+| 101 | 33 | 2/2 | 30/30 | 0 | 100.0% | 0.00 |
+| 102 | 34 | 2/2 | 30/30 | 0 | 100.0% | 0.00 |
+| 103 | 35 | 2/2 | 30/30 | 0 | 100.0% | 0.00 |
+| 104 | 33 | 2/2 | 29/30 | 0 | 97.0% | 0.33 |
+| 105 | 35 | 2/2 | 30/30 | 0 | 100.0% | 0.00 |
+| 106 | 34 | 2/2 | 29/30 | 0 | 100.0% | 0.00 |
+| 107 | 34 | 2/2 | 30/30 | 0 | 97.1% | 0.33 |
+| 108 | 34 | 2/2 | 30/30 | 0 | 100.0% | 0.00 |
+| 109 | 35 | 2/2 | 30/30 | 0 | 100.0% | 0.00 |
+
 ## Interpretation
 
 These results describe synthetic scenario evaluations under controlled perturbations. Lead time reflects detection delay (0 days indicates detection on scenario day 1; this is not predictive lead time ahead of onset). Multi-seed backtesting across tuning and hold-out seeds evaluates detection consistency across randomized demand and unavailability trajectories under past-only causal baselines.

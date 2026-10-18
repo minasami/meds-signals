@@ -69,28 +69,34 @@ The pipeline runs as stateless batch steps that read and write CSV and JSON. It 
 - **Explainability:** every card lists each signal with its value and unit (for example `residual_z 3.1` and `unavailable_ratio 0.818`), the window, the assumptions, a responsible role and a suggested operational follow-up. A shortage goes to the pharmacy-network supply lead; unusual demand goes to the public-health surveillance officer. The follow-up is always to verify through authorised channels. Each card ends with "Signal for investigation, not a diagnosis."
 
 ## 5. Validation (synthetic backtest)
-`eval/backtest.py` scores the alerts against the scenario labels for 10 seeds. Results are in `reports/backtest.md` and `reports/metrics.json`.
+`eval/backtest.py` scores the alerts against the scenario labels on 10 original seeds and on a fresh, untouched hold-out of 10 seeds (100–109). Results are in `reports/backtest.md` and `reports/metrics.json`.
 
-| Metric | Default seed 20261018 | Tuning, 5 seeds (mean) | Hold-out 2, 3, 5, 8, 13 (mean) | All 10 seeds: mean (min/max) |
-|---|---:|---:|---:|---:|
-| Alerts emitted | 32 | 32.2 | 35.2 | 33.7 (31–38) |
-| Scenario sensitivity (S1 + S2) | 100% | 100% | 100% | 100% (min 100%) |
-| Series sensitivity | 100% | 99.4% | 100% | 99.7% (min 96.9%) |
-| Shortage series recall | 2/2 | 2/2 on all seeds | 2/2 on all seeds | 2/2 on all seeds |
-| Heatwave series recall | 30/30 | 149/150 | 150/150 | 299/300 |
-| Alert-level PPV proxy | 100% | 100% | 98.9% | 99.5% (min 97.2%) |
-| False alarms (count; per 30 days) | 0; 0.00 | 0; 0.00 | 2; 0.13 | 2; 0.07 (max 0.33) |
-| Media-spike alerts (S3) | 0 | 0 | 0 | 0 on every seed |
-| Missing-data alerts (S4) | 0 | 0 | 0 | 0 on every seed |
-| Detection delay from onset | 0 days | 0 days | 0 days | 0 days |
+| Metric | Default seed 20261018 | Tuning, 5 seeds (mean) | Hold-out 2, 3, 5, 8, 13 (mean) | All 10 seeds: mean (min/max) | **Fresh hold-out 100–109: mean (min/max)** |
+|---|---:|---:|---:|---:|---:|
+| Alerts emitted | 32 | 32.2 | 35.2 | 33.7 (31–38) | 34.2 (33–35) |
+| Scenario sensitivity (S1 + S2) | 100% | 100% | 100% | 100% (min 100%) | 100% (min 100%) |
+| Series sensitivity | 100% | 99.4% | 100% | 99.7% (min 96.9%) | 99.4% (min 96.9%) |
+| Shortage series recall | 2/2 | 2/2 on all seeds | 2/2 on all seeds | 2/2 on all seeds | 2/2 on all seeds |
+| Heatwave series recall | 30/30 | 149/150 | 150/150 | 299/300 | 298/300 |
+| Alert-level PPV proxy | 100% | 100% | 98.9% | 99.5% (min 97.2%) | 99.4% (min 97.0%) |
+| False alarms (count; per 30 days) | 0; 0.00 | 0; 0.00 | 2; 0.13 | 2; 0.07 (max 0.33) | 2; 0.07 (max 0.33) |
+| Media-spike alerts (S3) | 0 | 0 | 0 | 0 on every seed | 0 on every seed |
+| Missing-data alerts (S4) | 0 | 0 | 0 | 0 on every seed | 0 on every seed |
+| Detection delay from onset | 0 days | 0 days | 0 days | 0 days | 0 days |
 
 **Caveats**
 - These are synthetic results with known labels. They are not real-world performance estimates.
 - **The lead time is a detection delay of 0 days.** Alerts fire on the scenario's first day. This is not a prediction ahead of onset.
-- The hold-out seeds informed the final detector fix, so they are not fully untouched. A fresh seed set (for example seeds 100–109) is needed for a clean final claim.
-- The 2 false alarms come from seed 5 (enalapril, Assiut) and seed 13 (cetirizine, Alexandria, a PM2.5 coincidence outside the media window).
+- The original hold-out seeds informed the final detector fix, so they are not fully untouched. **The fresh hold-out (seeds 100–109) is the clean result:** it was evaluated once, after the detector was frozen, and nothing was tuned afterwards.
+- **Original 10 seeds, 2 false alarms:**
+  - seed 5: enalapril, Assiut (extreme supply friction)
+  - seed 13: cetirizine, Alexandria (a PM2.5 coincidence outside the media window)
+- **Fresh hold-out, 2 false alarms:**
+  - seed 104: the oral rehydration salts heatwave episode in Assiut was upgraded to `possible_shortage` when supply friction appeared mid-episode. It counts as both a missed heatwave series and a false alarm.
+  - seed 107: ambroxol, Giza (extreme supply friction)
+- **Fresh hold-out, missed series:** seed 106, probiotic mix in Alexandria, was not detected.
 - "PPV" and "false alarm" are proxies: they score alerts against scenario labels, not against confirmed events.
-- **Runtime on the dev box:** demo about 8–10 s, the 9 tests about 7 s, the 10-seed backtest about 70 s.
+- **Runtime on the dev box:** demo about 8–10 s, the 10 tests about 7 s, the full backtest (10 original + 10 fresh seeds) about 130 s.
 
 ## 6. Privacy, responsible AI and data governance
 - **Synthetic only.** There is no production data path, and no individual-level data or identifiers. The pharmacy referral panel lists only fictional **MOCK** pharmacies.
@@ -110,7 +116,9 @@ The pipeline runs as stateless batch steps that read and write CSV and JSON. It 
 - **Synthetic scope:** the thresholds are hand-set and must be calibrated on real, prospective data.
 - **Warm-up:** the baseline needs 14 days of history before it scores a day.
 - **Suppression boundary:** supply friction is observable only where the local unavailable count is at least 10. Small areas and rare medicines can be invisible.
-- **Residual false alarms:** persistent noise or environmental coincidences can still cause them (2 across 10 seeds).
+- **Residual false alarms:** persistent noise or environmental coincidences can still cause them (2 across the original 10 seeds; 2 across the fresh 10).
+- **Episode relabelling:** an unusual-demand episode can be upgraded to `possible_shortage` if supply friction appears mid-episode. In a heatwave this can be the wrong label (fresh seed 104).
+- **Extreme supply-only cards:** an alert raised by the extreme supply-friction route before the friction has persisted can show an empty signal list on its card. The card's explanation needs to name that route.
 - **Coverage:** Egypt only, and governorate level only. There is no link yet to clinical, laboratory or regulator shortage data. Grouping catalog records by INN needs cleaning where scientific names are missing.
 - **Performance:** detection still loops row by row. That is fine at this scale but not yet optimised for national volume.
 

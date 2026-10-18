@@ -37,13 +37,19 @@ flowchart LR
 | Tuning (20261018, 1, 42, 7777, 99999) | 99.4% (96.9%) | 100.0% (100.0%) | 0 (0.00) | 0 | 0 |
 | Hold-out (2, 3, 5, 8, 13) | 100.0% (100.0%) | 98.9% (97.2%) | 2 (0.13) | 0 | 0 |
 | All 10 seeds | 99.7% (96.9%) | 99.5% (97.2%) | 2 (0.07) | 0 | 0 |
+| **Fresh untouched hold-out (seeds 100–109)** | **99.4% (96.9%)** | **99.4% (97.0%)** | **2 (0.07)** | **0** | **0** |
 
-Scenario sensitivity is 100% on every seed. Each shortage series was detected on every seed (2/2), and the heatwave series reached 299/300 over the 10 seeds.
+Scenario sensitivity is 100% on every seed in all sets. Each shortage series was detected on every seed (2/2). The heatwave series reached 299/300 over the original 10 seeds and 298/300 on the fresh hold-out.
+
+The **fresh hold-out is the clean result**: I ran seeds 100–109 once, after the detector was frozen, and nothing was changed afterwards. On those seeds:
+- seed 104: a heatwave episode was relabelled `possible_shortage`, so it counts as both a missed series and a false alarm
+- seed 106: one heatwave series was missed
+- seed 107: there was one extreme supply-friction false alarm
 
 **Read these numbers with care:**
 - They come from synthetic data with known labels. They are not real-world performance.
 - The lead time is **0 days**. That is the delay from scenario onset to detection (alerts fire on day 1), not a prediction ahead of onset.
-- The hold-out seeds informed the last detector fix, so they are not fully untouched. A fresh seed set is needed for a clean final check.
+- The original hold-out seeds (2, 3, 5, 8, 13) informed the last detector fix, so they are not fully untouched. That is why the fresh hold-out above is reported separately.
 
 Full results are in `reports/backtest.md` and `reports/metrics.json`; the methods are in `docs/TECHNICAL.md`.
 
@@ -60,7 +66,7 @@ python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
 make demo                          # synthetic pipeline, about 10 s
 streamlit run app/streamlit_app.py # dashboard; generates demo data on first run if missing
 ```
-Other commands: `make test` (9 tests), `make backtest` (10 seeds, about 70 s) and `make all` (demo + tests). Without `make`, use `./run.sh demo|test|backtest|all`.
+Other commands: `make test` (10 tests), `make backtest` (original 10 seeds plus fresh hold-out 100–109, about 130 s) and `make all` (demo + tests). Without `make`, use `./run.sh demo|test|backtest|all`.
 
 ## Limitations
 The data is synthetic and the thresholds are uncalibrated on real data. There is no role-based access control in this local prototype. App users are not a representative sample. Supply friction can only be observed where the local unavailable count is at least 10. The prototype covers Egypt only and has no clinical, laboratory or regulator shortage data. See `docs/TECHNICAL.md` for the full list and the pilot plan.

@@ -421,5 +421,130 @@
         "media_alerts": 0
       }
     }
+  },
+  "fresh_holdout_evaluation": {
+    "seeds_evaluated": [
+      100,
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109
+    ],
+    "scenario_sensitivity": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "series_sensitivity": {
+      "mean": 0.9938,
+      "min": 0.9688,
+      "max": 1.0
+    },
+    "shortage_series_recall": {
+      "mean": 1.0,
+      "min": 1.0
+    },
+    "heatwave_series_recall": {
+      "mean": 0.9933,
+      "min": 0.9667
+    },
+    "alert_level_ppv_proxy": {
+      "mean": 0.994,
+      "min": 0.9697,
+      "max": 1.0
+    },
+    "false_alarms_per_30_days": {
+      "mean": 0.0667,
+      "max": 0.3333
+    },
+    "media_spike_alerts_total": 0,
+    "missing_data_alerts_total": 0,
+    "per_seed_summary": {
+      "100": {
+        "alerts": 35,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "101": {
+        "alerts": 33,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "102": {
+        "alerts": 34,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "103": {
+        "alerts": 35,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "104": {
+        "alerts": 33,
+        "ppv": 0.9697,
+        "fa_30d": 0.3333,
+        "shortage": "2/2",
+        "heatwave": "29/30",
+        "media_alerts": 0
+      },
+      "105": {
+        "alerts": 35,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "106": {
+        "alerts": 34,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "29/30",
+        "media_alerts": 0
+      },
+      "107": {
+        "alerts": 34,
+        "ppv": 0.9706,
+        "fa_30d": 0.3333,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "108": {
+        "alerts": 34,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      },
+      "109": {
+        "alerts": 35,
+        "ppv": 1.0,
+        "fa_30d": 0.0,
+        "shortage": "2/2",
+        "heatwave": "30/30",
+        "media_alerts": 0
+      }
+    }
   }
 }

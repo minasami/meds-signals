@@ -5,6 +5,8 @@ import pandas as pd
 
 TUNING_SEEDS = [20261018, 1, 42, 7777, 99999]
 HOLDOUT_SEEDS = [2, 3, 5, 8, 13]
+# Fresh hold-out: first evaluated after all detector tuning was frozen; never used to change the detector.
+FRESH_HOLDOUT_SEEDS = list(range(100, 110))
 SEEDS = TUNING_SEEDS
 
 def evaluate(alerts: list, scenarios: dict) -> dict:
@@ -260,13 +262,15 @@ def run():
     tuning_metrics = evaluate_multi_seed(TUNING_SEEDS)
     holdout_metrics = evaluate_multi_seed(HOLDOUT_SEEDS)
     combined_metrics_10 = evaluate_multi_seed(TUNING_SEEDS + HOLDOUT_SEEDS)
+    fresh_holdout_metrics = evaluate_multi_seed(FRESH_HOLDOUT_SEEDS)
 
     combined_metrics = {
         **default_metrics,
         "multi_seed_evaluation": tuning_metrics,  # Tuning seeds (backwards compatible)
         "tuning_evaluation": tuning_metrics,
         "holdout_evaluation": holdout_metrics,
-        "combined_10_seed_evaluation": combined_metrics_10
+        "combined_10_seed_evaluation": combined_metrics_10,
+        "fresh_holdout_evaluation": fresh_holdout_metrics
     }
 
     reports_dir = root / "reports"
@@ -305,6 +309,8 @@ def run():
     lines.extend(_format_seed_section("Hold-out seeds robustness", holdout_metrics))
     lines.append("")
     lines.extend(_format_seed_section("Combined 10-seed robustness summary", combined_metrics_10))
+    lines.append("")
+    lines.extend(_format_seed_section("Fresh untouched hold-out (evaluated once, after tuning was frozen)", fresh_holdout_metrics))
 
     lines.extend([
         "",
