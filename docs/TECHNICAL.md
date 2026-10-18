@@ -1,86 +1,149 @@
-# Technical documentation — MedS Hub Medicine Signals
+# MedS Hub Medicine Signals: technical document
 
-## Problem & fit
-Prototype an explainable early-warning view for aggregate medicine-interest and supply-friction signals in Egypt. Potential fit: pharmacy-network operations and public-health surveillance. This is a prototype, not a validated service.
+**Challenge:** Future Health Digital Innovation Challenge, statement 06 (Population and Workforce Health Early Warning).
+**Status:** working prototype on **synthetic data only**. It is not a validated or operational service.
+**Author:** Mena Samy Tawfik Saad, pharmacist and founder of MedS Hub. I also reviewed the alert logic and wording as a pharmacist.
 
-## Architecture
+## 1. Problem and fit
+In Egypt, people usually look for medicines at community pharmacies, often by brand name. When a medicine runs short, or demand for a class jumps (for example oral rehydration and antidiarrhoeals in a heatwave), the first signs show up at the counter. The same request is repeated from pharmacy to pharmacy, and people start asking for "anything like it". Pharmacists often see this weeks before an official report appears. The signal is real, but it is scattered and does not reach supply planners or public-health teams.
 
+MedS Hub is a bilingual Arabic/English medicine catalog and pharmacy coordination app, with about 85,000 medicine records (October 2026). Medicine searches, pharmacy quote requests and "not available" replies are natural, countable signals of demand and supply friction.
+
+This prototype shows how those signals could be:
+1. aggregated safely
+2. combined with environmental context
+3. turned into explainable alerts that name a responsible role
+
+That covers what statement 06 asks for: at least two materially different signal types, explainable anomaly detection, privacy-preserving views, and a backtest that reports sensitivity, PPV, false alarms, lead time and missing-input behaviour.
+
+## 2. Architecture
 ```mermaid
 flowchart LR
-  A[Fixed-seed synthetic event generator] --> B[Aggregate and k=10 suppression]
-  E[Synthetic environment cache] --> D[Signal detection and fusion]
+  A["synth/generate.py<br/>seeded synthetic events"] --> B["pipeline/aggregate.py<br/>daily counts, reject identifiers, k=10 suppression"]
+  E["env/<br/>synthetic cache or optional Open-Meteo"] --> D["pipeline/detect.py<br/>past-only z + CUSUM, supply friction, fusion, episodes"]
   B --> D
-  C[Scenario labels] --> F[Backtest and metrics]
+  D --> G["app/streamlit_app.py<br/>map, series, environment, alert cards, mock referral panel"]
+  C["data/scenarios.json<br/>labelled scenarios"] --> F["eval/backtest.py<br/>10-seed backtest"]
   D --> F
-  D --> G[Streamlit dashboard]
-  E --> G
 ```
+The pipeline runs as stateless batch steps that read and write CSV and JSON. It is offline-first, has no telemetry, and makes no network calls except the optional Open-Meteo fetcher.
 
-## Data & synthetic method
-90 daily dates, 50 INNs in six therapeutic classes, six governorates, four event types. Fixed seed `20261018`; deterministic weekday seasonality, mild trend, Poisson/binomial noise, labelled shortage, heatwave-related ORS demand, media-driven search spike, and missing-data dates. Synthetic environment includes daily maximum temperature and PM2.5; the synthetic heatwave aligns with the ORS demand scenario. No real pharmacy, person, prescription, or user records are used.
+## 3. Data (synthetic)
+- **Size:** 90 days (1 Jul to 28 Sep 2026), 50 INNs in 6 therapeutic classes, and 6 governorates (Cairo, Giza, Alexandria, Qalyubia, Dakahlia, Assiut).
+- **Event types (4):** `catalog_search`, `quote_request`, `quote_unavailable` and `alt_search_after_unavailable`.
+- **Generator:** default seed `20261018`, weekday seasonality, a mild trend, and Poisson/binomial noise.
+- **Labelled scenarios:**
 
-`env/fetch_open_meteo.py` optionally fetches public historical weather and air-quality data without an API key. The default dashboard uses `env/environment.csv`, generated synthetically. Fetched environmental values should be clearly disclosed in any subsequent run.
+| ID | Scenario | Design | Expected result |
+|---|---|---|---|
+| S1 | Supply shortage | Amlodipine in Alexandria and Dakahlia, 12–23 Aug | `possible_shortage` |
+| S2 | Heatwave | Rising demand in the ORS/antidiarrhoeal class in all 6 governorates, 20–26 Aug, aligned with a synthetic temperature anomaly | `unusual_demand` |
+| S3 | Media-driven search spike | Cetirizine: searches rise, availability stays normal | Negative control: no alert |
+| S4 | Missing-data dates | Assiut and Qalyubia | Negative control: no confident alert |
 
-## Methods
-- **Aggregate & privacy suppression:** Aggregate counts by date, INN, class, governorate, and event type. Suppress event cells below k=10; suppressed values are treated as missing/unobserved, not zero. Prohibited personal identifier columns are rejected at ingestion. Explicitly missing rows (`data_status == "missing"`) remain NaN and do not become 0.0 or lower trailing baselines.
-- **Calendar-day alignment:** Time series are aligned to a complete daily calendar (`pd.date_range`) prior to rolling calculations so that gaps do not distort trailing windows.
-- **Strictly causal past-only baseline:** Weekday median from a trailing 28-day past window (`iloc[:i]`) with a 14-day warm-up period. MAD is computed strictly on past residuals with a minimum scale floor of 2.0. No future data or full-series standard deviation fallback is used.
-- **Independent demand evaluation:** Demand anomalies are evaluated from `catalog_search` residual z-scores and positive CUSUM accumulation without requiring unavailability to survive suppression.
-- **Coarser supply friction clearing k=10:** Supply friction is computed as `quote_unavailable / quote_request`. When local cell quote requests are suppressed below k=10, the denominator falls back to coarser aggregates that clear k=10 (INN national aggregate or class x governorate aggregate), while the numerator stays the local cell count (which must itself clear k=10). These roll-ups are internal to the detector and are never written out or displayed.
-- **Climate-sensitive environmental fusion:** Environmental anomalies serve as supporting signals strictly for pre-declared climate-sensitive classes:
-  - Temperature anomaly (>= +6.0°C delta against trailing 21-day local baseline) supports `antidiarrhoeals_ors`.
-  - Particulate matter anomaly (>= +25.0 µg/m³ PM2.5 delta) supports `respiratory`.
-  - Environmental anomalies alone never trigger an alert.
-- **Extreme single-signal rule & demand corroboration:** Demand anomalies alone never trigger alerts, regardless of magnitude (the single-signal extreme demand rule has been removed). Unusual demand must be corroborated by persistent supply friction or environmental anomalies (for climate-sensitive classes). Supply friction requires persistence (present on the evaluated day AND on at least one of the previous 2 evaluated days). Extreme supply friction (unavailability ratio >= 0.55 and unsuppressed unavailable >= 10) remains a single-signal alert route. Media spikes (3x volume, z up to 19) produce demand signals but never alert because demand alone cannot trigger alerts.
-- **Alert typing and episode consolidation:** An alert is typed causally on its start date as `possible_shortage` whenever persistent supply friction is present; otherwise `unusual_demand`. Consecutive daily alerts for the same INN, class, and governorate are merged into cohesive multi-day episodes (allowing up to a 2-day gap). If supply friction emerges on subsequent days within the consolidation window, the consolidated episode is upgraded to `possible_shortage`, with the causal `initial_type` and `type_history` recorded and documented in the alert assumptions.
+- **Environment:** daily maximum temperature and PM2.5. The data is synthetic by default and labelled as such in the app. `env/fetch_open_meteo.py` can optionally fetch public data without an API key; it writes to a separate file so the demo cache is never overwritten.
 
-## Validation results
-Evaluated by `eval/backtest.py` across 10 randomized synthetic seeds (5 tuning seeds: `20261018`, `1`, `42`, `7777`, `99999`; and 5 hold-out seeds: `2`, `3`, `5`, `8`, `13`) against labelled synthetic ground truth; see `reports/backtest.md` and `reports/metrics.json`.
+## 4. Methods
+- **Aggregation and privacy:** counts are grouped by date × INN × class × governorate × event type.
+  - Input columns that look like identifiers (user, patient, prescription, phone, name, national ID and similar) are rejected.
+  - Cells below **k=10** are suppressed and treated as missing, not zero.
+  - Rows explicitly marked missing stay NaN, so they never lower a baseline.
+- **Past-only baseline:** each series is first aligned to a full daily calendar.
+  - The expected value for day *t* is the same-weekday median over the trailing 28 days (*t*−28 to *t*−1), after a 14-day warm-up.
+  - Scale is the MAD of past residuals × 1.4826, with a floor of 2.0.
+  - No future data is used. A test checks this.
+- **Demand signal:** the `catalog_search` residual z-score is at least 2.8, **or** the one-sided CUSUM (slack 0.8) is at least 6.0.
+- **Supply friction:** the ratio `quote_unavailable / quote_request`.
+  - It counts when the ratio is at least 0.25, the local unavailable count is at least 10, and it **persists**: present today and on at least one of the previous 2 evaluated days.
+  - If the local quote-request cell is suppressed, the denominator falls back to a coarser aggregate that clears k=10 (the national INN count, then class × governorate).
+  - These roll-ups are internal and are never shown.
+- **Environmental support:** applies only to pre-declared climate-sensitive classes. The baseline is the trailing 21-day median.
+  - A temperature rise of at least +6 °C supports `antidiarrhoeals_ors`.
+  - A PM2.5 rise of at least +25 µg/m³ supports `respiratory`.
+- **Fusion rule:** an alert needs at least two signal types. The only single-signal route is extreme supply friction: a ratio of at least 0.55 with at least 10 unavailable.
+  - **Demand alone never alerts**, whatever its size. This is why the media spike is ignored.
+  - **Environment alone never alerts.**
+- **Typing and episodes:** an alert is typed `possible_shortage` when supply friction is present on its start day; otherwise it is `unusual_demand`.
+  - Daily alerts for the same INN × governorate are merged into episodes, allowing a gap of up to 2 days.
+  - If supply friction appears later in an episode, the episode is upgraded. `initial_type` and `type_history` record the change.
+- **Explainability:** every card lists each signal with its value and unit (for example `residual_z 3.1` and `unavailable_ratio 0.818`), the window, the assumptions, a responsible role and a suggested operational follow-up. A shortage goes to the pharmacy-network supply lead; unusual demand goes to the public-health surveillance officer. The follow-up is always to verify through authorised channels. Each card ends with "Signal for investigation, not a diagnosis."
 
-| Metric | Default Seed (20261018) | Tuning Seeds Mean (5 seeds) | Hold-out Seeds Mean (5 seeds) | Combined 10-Seed Mean (min) |
+## 5. Validation (synthetic backtest)
+`eval/backtest.py` scores the alerts against the scenario labels for 10 seeds. Results are in `reports/backtest.md` and `reports/metrics.json`.
+
+| Metric | Default seed 20261018 | Tuning, 5 seeds (mean) | Hold-out 2, 3, 5, 8, 13 (mean) | All 10 seeds: mean (min/max) |
 |---|---:|---:|---:|---:|
-| Total alerts emitted | 32 | 32.2 | 35.2 | 33.7 (31 – 38) |
-| Scenario sensitivity (shortage + heatwave) | 100.0% | 100.0% | 100.0% | 100.0% (100.0% min) |
-| Series sensitivity (shortage + heatwave) | 100.0% | 99.4% | 100.0% | 99.7% (96.9% min) |
-| - Shortage series recall | 2/2 (100%) | 100.0% | 100.0% | 100.0% (2/2 on all seeds) |
-| - Heatwave series recall | 30/30 (100%) | 99.3% | 100.0% | 99.7% (29/30 – 30/30) |
-| Alert-level PPV proxy | 100.0% | 100.0% | 98.9% | 99.5% (97.2% min) |
-| False alarms per 30 days (proxy) | 0.00 | 0.00 | 0.13 | 0.07 (0.33 max) |
-| Media-spike false alarms (S3 negative control) | 0 | 0.0 | 0.0 | 0 across all seeds |
-| Missing-data false alarms (S4 negative control) | 0 | 0.0 | 0.0 | 0 across all seeds |
-| Lead time (detection delay from scenario onset) | 0 days | 0 days | 0 days | Day 1 detection (0 days) |
+| Alerts emitted | 32 | 32.2 | 35.2 | 33.7 (31–38) |
+| Scenario sensitivity (S1 + S2) | 100% | 100% | 100% | 100% (min 100%) |
+| Series sensitivity | 100% | 99.4% | 100% | 99.7% (min 96.9%) |
+| Shortage series recall | 2/2 | 2/2 on all seeds | 2/2 on all seeds | 2/2 on all seeds |
+| Heatwave series recall | 30/30 | 149/150 | 150/150 | 299/300 |
+| Alert-level PPV proxy | 100% | 100% | 98.9% | 99.5% (min 97.2%) |
+| False alarms (count; per 30 days) | 0; 0.00 | 0; 0.00 | 2; 0.13 | 2; 0.07 (max 0.33) |
+| Media-spike alerts (S3) | 0 | 0 | 0 | 0 on every seed |
+| Missing-data alerts (S4) | 0 | 0 | 0 | 0 on every seed |
+| Detection delay from onset | 0 days | 0 days | 0 days | 0 days |
 
-*Note on lead time:* On synthetic scenarios, detection occurs on scenario day 1 (detection delay = 0 days). This measures immediate detection on scenario onset, not predictive lead time ahead of onset.
+**Caveats**
+- These are synthetic results with known labels. They are not real-world performance estimates.
+- **The lead time is a detection delay of 0 days.** Alerts fire on the scenario's first day. This is not a prediction ahead of onset.
+- The hold-out seeds informed the final detector fix, so they are not fully untouched. A fresh seed set (for example seeds 100–109) is needed for a clean final claim.
+- The 2 false alarms come from seed 5 (enalapril, Assiut) and seed 13 (cetirizine, Alexandria, a PM2.5 coincidence outside the media window).
+- "PPV" and "false alarm" are proxies: they score alerts against scenario labels, not against confirmed events.
+- **Runtime on the dev box:** demo about 8–10 s, the 9 tests about 7 s, the 10-seed backtest about 70 s.
 
-## Responsible AI & data governance
-- **Synthetic-only prototype:** no production data path, individual-level data, or external user identifiers.
-- **Small-cell privacy:** k=10 suppression is applied to aggregate event-type cells. It is not a guarantee of anonymity; future deployments need disclosure-risk review, complementary suppression and query controls.
-- **RBAC:** not implemented in this local prototype. A pilot must add role-based access control, least privilege, audit logs, secure secrets management, retention controls and incident response.
-- **Egypt PDPL:** assess obligations under Egypt's Personal Data Protection Law No. 151/2020 with qualified local counsel and the competent regulator before processing personal data. The Personal Data Protection Center licence/approval has **not yet been obtained**; no claim of compliance or approval is made here.
-- No clinical or substitution advice is produced. Alerts are operational signals requiring authorized human review.
+## 6. Privacy, responsible AI and data governance
+- **Synthetic only.** There is no production data path, and no individual-level data or identifiers. The pharmacy referral panel lists only fictional **MOCK** pharmacies.
+- **Aggregate only, k=10 suppression.** The tool has no individual-level views. Suppression is not a guarantee of anonymity. A pilot needs a disclosure-risk review, complementary suppression and query controls.
+- **Egypt PDPL (Law 151/2020).** Processing real data, including any cross-border hosting, would need a licence from Egypt's **Personal Data Protection Center**. **That licence has not been obtained yet; licensing is planned.** No claim of compliance or approval is made. A pilot would use opt-in consent for anonymised statistics, separate from service consent. The pipeline would receive only counts, never prescription images, free text or user IDs.
+- **Human in the loop.** Alerts are operational signals for authorised human review. They are not diagnoses or confirmed shortages.
+- **No clinical or substitution advice.** Any switch to another medicine remains a decision for a pharmacist or prescriber.
+- **Not yet implemented** (required before a pilot): role-based access control, audit logging, secrets management, retention rules and incident response.
+- **Known biases:** app users are not representative (urban, smartphone-owning, literate). Price changes, promotions and media also move demand.
 
-## Assumptions
-- Synthetic counts stand in for aggregate product-interest events, not actual transactions.
-- Quote-unavailable counts and quote requests are generated separately; their ratio is only a proxy.
-- Environmental series are synthetic by default.
-- A single alert is not proof of a shortage or public-health event.
+## 7. Assumptions
+- Synthetic counts stand in for aggregate product-interest events, not actual sales.
+- The ratio of quote-unavailable replies to quote requests is a proxy for supply friction, not a measure of stock.
+- A single alert does not prove a shortage or a public-health event.
 
-## Limitations
-- **Synthetic fixture scope:** All evaluation is on synthetic data; distributions and thresholds require empirical calibration on real prospective data before pilot deployment.
-- **Warm-up requirement:** The causal trailing baseline requires 14 days of historical data before producing reliable z-scores.
-- **Suppression boundary:** Fine-grained cells below k=10 cannot emit individual availability signals. Coarser roll-ups are used only as the supply-friction denominator; the numerator (local unavailable count) must itself clear k=10, so supply friction is only observable where local unavailability is already >= 10.
-- **Persistent noise & coincidence:** Although demand alone no longer produces alerts from media spikes, occasional false alarms can arise from rare persistent supply noise runs or environmental coincidences (e.g. 2 false alarms across 10 seeds in hold-out seeds 5 and 13).
-- **No clinical attribution:** Signals reflect interest and friction, not clinical diagnoses or verified pharmaceutical stock levels.
+## 8. Limitations
+- **Synthetic scope:** the thresholds are hand-set and must be calibrated on real, prospective data.
+- **Warm-up:** the baseline needs 14 days of history before it scores a day.
+- **Suppression boundary:** supply friction is observable only where the local unavailable count is at least 10. Small areas and rare medicines can be invisible.
+- **Residual false alarms:** persistent noise or environmental coincidences can still cause them (2 across 10 seeds).
+- **Coverage:** Egypt only, and governorate level only. There is no link yet to clinical, laboratory or regulator shortage data. Grouping catalog records by INN needs cleaning where scientific names are missing.
+- **Performance:** detection still loops row by row. That is fine at this scale but not yet optimised for national volume.
 
-## Scalability
-For a pilot, use scheduled aggregate ingestion, partitioned time-series storage, data-quality monitoring, model/version tracking, reproducible runs, alert deduplication, alert acknowledgement, access logging and monitored deployment. Keep the minimum necessary aggregate granularity and apply disclosure-risk controls.
+## 9. Scalability and deployment
+For a pilot:
+- scheduled aggregate ingestion
+- partitioned time-series storage (Postgres)
+- data-quality and missing-input monitoring
+- versioned thresholds and reproducible runs
+- alert deduplication and acknowledgement
+- access logging and RBAC
+- monitored deployment
 
-## Commercial model & pilot pathway
-Potential model: paid dashboard and aggregate alerting for pharmacy networks, distributors or public-health partners, with onboarding and reporting services. Start with a time-limited, synthetic-data demonstration; then a governance-led feasibility study using approved aggregates, a written data-sharing agreement, legal review, stakeholder validation and prospective shadow-mode evaluation. Do not claim operational performance before validation.
+The design keeps only the minimum aggregate granularity. It carries over to any Arabic-speaking pharmacy network where a local partner supplies the data under local law.
 
-## How to run
-- Run `make demo` (or `./run.sh demo`) for a fast end-to-end pipeline run (seconds).
-- Run `make backtest` (or `./run.sh backtest`) to run the 10-seed tuning and hold-out backtest.
-- Run `make test` (or `pytest -q`) for unit and regression tests.
-- Run `make all` for demo plus tests.
-- Run `streamlit run app/streamlit_app.py` for the dashboard.
+## 10. Pilot plan and commercial path
+1. **Now (Nov 2026):** this synthetic prototype, published and reproducible.
+2. **Governance first:** legal review, the PDPC licensing process, a data-sharing agreement and opt-in consent for anonymised statistics in the MedS Hub app.
+3. **Shadow mode (3 months) with participating pilot pharmacies.** Alerts are logged but not acted on, and are compared with pharmacists' own shortage reports. Then thresholds are re-calibrated and real sensitivity, PPV and lead time are measured.
+4. **Aggregated weekly digest:** first for the pilot pharmacies, then for interested pharmacy-network or public-health stakeholders. No partnerships are claimed.
+
+**Commercial hypotheses (not validated):**
+- B2B dashboards for pharmacy chains and distributors, for stock planning
+- aggregated insight reports
+- public-sector surveillance contracts
+
+No customers, prices or revenue are claimed.
+
+## 11. How to run
+```bash
+python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+make demo        # or ./run.sh demo
+make test        # or ./run.sh test (pytest -q)
+make backtest    # or ./run.sh backtest
+streamlit run app/streamlit_app.py
+```
