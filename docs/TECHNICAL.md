@@ -26,7 +26,7 @@ flowchart LR
   C["data/scenarios.json<br/>labelled scenarios"] --> F["eval/backtest.py<br/>10-seed backtest"]
   D --> F
 ```
-The pipeline runs as stateless batch steps that read and write CSV and JSON. It is offline-first, has no telemetry, and makes no network calls except the optional Open-Meteo fetcher.
+The pipeline runs as stateless batch steps that read and write CSV and JSON. It is offline-first and has no telemetry. Its only network use is the dashboard map tiles and the optional Open-Meteo fetcher (see section 8).
 
 ## 3. Data (synthetic)
 - **Size:** 90 days (1 Jul to 28 Sep 2026), 50 INNs in 6 therapeutic classes, and 6 governorates (Cairo, Giza, Alexandria, Qalyubia, Dakahlia, Assiut).
@@ -112,7 +112,13 @@ The pipeline runs as stateless batch steps that read and write CSV and JSON. It 
 - The ratio of quote-unavailable replies to quote requests is a proxy for supply friction, not a measure of stock.
 - A single alert does not prove a shortage or a public-health event.
 
-## 8. Limitations
+## 8. Dependencies
+- **Python:** 3.11 or later (developed and tested with 3.13).
+- **Packages** (`requirements.txt`): pandas >=2.1,<3 · numpy >=1.26,<3 · streamlit >=1.35,<2 · plotly >=5.20,<7 · pytest >=8,<9 · requests >=2.31,<3 (used only by the optional Open-Meteo fetcher).
+- **Outside services:** the dashboard map (`st.map`) loads public basemap tiles from CARTO, built on OpenStreetMap data, in the viewer's browser. The demo, tests and backtest make no other network calls, and Streamlit usage statistics are switched off. The only other network code is the optional `env/fetch_open_meteo.py` (public Open-Meteo API, no key), which runs only when started by hand.
+- **Data:** synthetic only, generated locally from fixed seeds (`synth/`, `env/make_synthetic_env.py`). There is no dependency on MedS Hub production systems, real users, prescriptions, pharmacies or transactions.
+
+## 9. Limitations
 - **Synthetic scope:** the thresholds are hand-set and must be calibrated on real, prospective data.
 - **Warm-up:** the baseline needs 14 days of history before it scores a day.
 - **Suppression boundary:** supply friction is observable only where the local unavailable count is at least 10. Small areas and rare medicines can be invisible.
@@ -122,7 +128,7 @@ The pipeline runs as stateless batch steps that read and write CSV and JSON. It 
 - **Coverage:** Egypt only, and governorate level only. There is no link yet to clinical, laboratory or regulator shortage data. Grouping catalog records by INN needs cleaning where scientific names are missing.
 - **Performance:** detection still loops row by row. That is fine at this scale but not yet optimised for national volume.
 
-## 9. Scalability and deployment
+## 10. Scalability and deployment
 For a pilot:
 - scheduled aggregate ingestion
 - partitioned time-series storage (Postgres)
@@ -134,7 +140,7 @@ For a pilot:
 
 The design keeps only the minimum aggregate granularity. It carries over to any Arabic-speaking pharmacy network where a local partner supplies the data under local law.
 
-## 10. Pilot plan and commercial path
+## 11. Pilot plan and commercial path
 1. **Now (Nov 2026):** this synthetic prototype, published and reproducible.
 2. **Governance first:** legal review, the PDPC licensing process, a data-sharing agreement and opt-in consent for anonymised statistics in the MedS Hub app.
 3. **Shadow mode (3 months) with participating pilot pharmacies.** Alerts are logged but not acted on, and are compared with pharmacists' own shortage reports. Then thresholds are re-calibrated and real sensitivity, PPV and lead time are measured.
@@ -147,7 +153,7 @@ The design keeps only the minimum aggregate granularity. It carries over to any 
 
 No customers, prices or revenue are claimed.
 
-## 11. How to run
+## 12. How to run
 ```bash
 python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
 make demo        # or ./run.sh demo

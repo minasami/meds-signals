@@ -56,7 +56,7 @@ Full results are in `reports/backtest.md` and `reports/metrics.json`; the method
 ## Privacy by design
 - The pipeline accepts only aggregate counts per date × INN × governorate × event type. It rejects columns with personal identifiers.
 - Cells below k=10 are suppressed and treated as missing, not zero. Coarser roll-ups are used only inside the detector, as a denominator, and are never displayed.
-- The prototype has no production data path and no telemetry (`gatherUsageStats = false`). The only network code is the optional Open-Meteo fetcher.
+- The prototype has no production data path and no telemetry (`gatherUsageStats = false`). Apart from the dashboard map tiles (CARTO/OpenStreetMap), the only network code is the optional Open-Meteo fetcher.
 - The pharmacy referral panel lists only **MOCK** pharmacies.
 - A pilot that processes real data would need a licence from Egypt's **Personal Data Protection Center** (Law 151/2020). **That licence has not been obtained yet; licensing is planned.** No compliance claim is made.
 
