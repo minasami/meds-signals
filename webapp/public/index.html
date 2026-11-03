@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>meds-signals · early health signals for Egypt</title>
+<meta name="description" content="Upload pharmacy sales, environmental and workplace data to see early health signals. Early signal, not diagnosis.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main" data-i18n="skip">Skip to content</a>
+<header>
+  <div class="wrap head">
+    <h1>meds-signals <span class="tag" data-i18n="tagline">early signal, not diagnosis</span></h1>
+    <button id="lang" type="button" aria-label="Switch language / تغيير اللغة">العربية</button>
+  </div>
+</header>
+<main id="main" class="wrap">
+  <p class="banner" role="note" data-i18n="disclaimer">This tool shows statistical early signals from aggregated data. It is not a diagnosis and not medical advice. In an emergency call 123 (Egypt ambulance).</p>
+
+  <section aria-labelledby="h-up" class="card">
+    <h2 id="h-up" data-i18n="upload">1. Load data</h2>
+    <p data-i18n="uploadHelp">Choose CSV or JSON files. Files are read only inside your browser; nothing is uploaded or stored.</p>
+    <label class="file"><span data-i18n="choose">Choose files (pharmacy sales, environment, workplace)</span>
+      <input id="files" type="file" accept=".csv,.json,text/csv,application/json" multiple></label>
+    <div class="row">
+      <button id="loadSamples" type="button" data-i18n="samples">Load SAMPLE data (synthetic)</button>
+      <button id="clear" type="button" class="ghost" data-i18n="clear">Clear</button>
+    </div>
+    <details><summary data-i18n="formats">Expected columns and SAMPLE files</summary>
+      <ul class="fmt">
+        <li><b>Pharmacy sales</b>: <code>date, governorate, category, units</code> — <a href="samples/SAMPLE_pharmacy_sales.csv" download>SAMPLE_pharmacy_sales.csv</a></li>
+        <li><b>Environment</b>: <code>date, governorate, temp_c, pm25, humidity</code> — <a href="samples/SAMPLE_environment.csv" download>SAMPLE_environment.csv</a> · <a href="samples/SAMPLE_environment.json" download>SAMPLE_environment.json</a></li>
+        <li><b>Workplace</b>: <code>date, governorate, headcount, absences, heat_or_breathing_complaints</code> — <a href="samples/SAMPLE_workplace.csv" download>SAMPLE_workplace.csv</a></li>
+        <li><code>area</code> may replace <code>governorate</code>; optional <code>lat, lon</code> columns place unknown areas on the map. Aggregated counts only — never upload patient or prescription records.</li>
+      </ul>
+    </details>
+    <div id="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <section aria-labelledby="h-al" class="card">
+    <h2 id="h-al" data-i18n="alerts">2. Alerts</h2>
+    <p class="muted" data-i18n="method">Method: each series is compared with a robust trailing 28-day baseline (median and MAD) adjusted for day of week. A day is unusual when its robust z-score is ≥ 3; an alert needs 2 consecutive unusual days (or z ≥ 5 once). Environmental readings also alert on fixed thresholds (temperature ≥ 40 °C, PM2.5 ≥ 75 µg/m³).</p>
+    <div id="alerts" class="grid"></div>
+  </section>
+
+  <section aria-labelledby="h-map" class="card">
+    <h2 id="h-map" data-i18n="map">3. Risk map (last 14 days of data)</h2>
+    <p id="tileNote" class="muted" role="status" hidden>The background map could not load. Markers and the table below still show each area's signal level.</p>
+    <div id="map" role="region" aria-label="Map of governorate signal levels"></div>
+    <p class="legend"><span class="dot l0"></span><span data-i18n="l0">no signal</span> <span class="dot l1"></span><span data-i18n="l1">watch</span> <span class="dot l2"></span><span data-i18n="l2">elevated</span> <span class="dot l3"></span><span data-i18n="l3">high</span></p>
+    <table id="riskTable" class="sr-table"><caption data-i18n="tableCap">Signal level by area (text version of the map)</caption><thead><tr><th data-i18n="area">Area</th><th data-i18n="level">Level</th><th data-i18n="nAlerts">Active alerts</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <section aria-labelledby="h-adv" class="card">
+    <h2 id="h-adv" data-i18n="advice">4. Prevention advice</h2>
+    <div id="advice" class="grid"></div>
+  </section>
+
+  <section aria-labelledby="h-ai" class="card" id="aiBox" hidden>
+    <h2 id="h-ai" data-i18n="ai">Optional AI explanation</h2>
+    <p class="muted" data-i18n="aiHelp">Sends only the alert summaries shown above (no rows) to a language model. Off unless you click.</p>
+    <button id="aiBtn" type="button" data-i18n="aiBtn">Explain alerts</button>
+    <div id="aiOut" aria-live="polite"></div>
+  </section>
+</main>
+<footer class="wrap muted"><p data-i18n="foot">Prototype for the Future Health challenge. SAMPLE data is synthetic. Map © OpenStreetMap contributors.</p></footer>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="analysis.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

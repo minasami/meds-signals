@@ -1,0 +1,2 @@
+{ "name": "meds-signals", "private": true, "version": "2.0.0",
+  "scripts": { "build": "node scripts/check.cjs", "test": "node scripts/check.cjs" } }
