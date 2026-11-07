@@ -7,3 +7,4 @@ __pycache__/
 data/events.csv
 data/aggregated.csv
 data/alerts.json
+node_modules/

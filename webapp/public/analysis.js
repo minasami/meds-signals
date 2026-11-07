@@ -71,6 +71,34 @@
   const median = a => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2; };
   const THRESH = { temp_c: 40, pm25: 75 };
 
+
+  /* ---- Isolation Forest (plain JS, deterministic seed). Liu, Ting & Zhou 2008. ---- */
+  function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const hash = str => { let h = 2166136261; for (const c of String(str)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
+  const cFactor = n => n <= 1 ? 0 : 2 * (Math.log(n - 1) + 0.5772156649) - 2 * (n - 1) / n;
+  /** X: array of feature vectors. Returns anomaly score in (0,1] per row (>0.5 = more isolated than average). */
+  function isolationForest(X, opt = {}) {
+    const T = opt.trees || 100, psi = Math.min(opt.sample || 64, X.length), rand = rng(opt.seed || 1), dim = X[0] ? X[0].length : 0;
+    if (X.length < 8 || !dim) return X.map(() => 0);
+    const maxH = Math.ceil(Math.log2(psi));
+    const build = (idx, h) => {
+      if (h >= maxH || idx.length <= 1) return { size: idx.length };
+      const q = Math.floor(rand() * dim); let mn = Infinity, mx = -Infinity;
+      for (const i of idx) { const v = X[i][q]; if (v < mn) mn = v; if (v > mx) mx = v; }
+      if (mn === mx) return { size: idx.length };
+      const p = mn + rand() * (mx - mn), L = [], R = [];
+      for (const i of idx) (X[i][q] < p ? L : R).push(i);
+      return { q, p, l: build(L, h + 1), r: build(R, h + 1) };
+    };
+    const trees = [];
+    for (let t = 0; t < T; t++) { const all = X.map((_, i) => i);
+      for (let i = 0; i < psi; i++) { const j = i + Math.floor(rand() * (all.length - i)); [all[i], all[j]] = [all[j], all[i]]; }
+      trees.push(build(all.slice(0, psi), 0)); }
+    const path = (x, n, h) => n.size != null ? h + cFactor(n.size) : path(x, x[n.q] < n.p ? n.l : n.r, h + 1);
+    const c = cFactor(psi);
+    return X.map(x => { let s = 0; for (const tr of trees) s += path(x, tr, 0); return Math.pow(2, -(s / T) / c); });
+  }
+
   /** Robust, day-of-week-adjusted trailing z-score. Causal: day t only uses days before t. */
   function scoreSeries(s, opt = {}) {
     const W = opt.window || 28, ZT = opt.z || 3, ZH = opt.zHigh || 5;
@@ -93,6 +121,18 @@
       const absHit = THRESH[s.metric] != null && vals[i] >= THRESH[s.metric];
       res.push({ date: dates[i], value: vals[i], expected, z, unusual: (z != null && z >= ZT) || absHit, strong: (z != null && z >= ZH) || absHit, absHit });
     }
+    // Isolation Forest on [residual z, 3-day mean z, day-over-day change z]; combined with z-score.
+    // mode "z" = z-score only (previous behaviour); "combined" (default) = z-score AND forest agree, or strong/threshold hit.
+    const mode = opt.mode || "combined", IFT = opt.ifThreshold || 0.6;
+    const idx = res.map((r, i) => r.z != null ? i : -1).filter(i => i >= 0);
+    const X = idx.map(i => { const z3 = [i - 2, i - 1, i].map(k => res[k] && res[k].z != null ? res[k].z : 0);
+      return [res[i].z, (z3[0] + z3[1] + z3[2]) / 3, res[i].z - (res[i - 1] && res[i - 1].z != null ? res[i - 1].z : 0)]; });
+    const sc = isolationForest(X, { seed: hash(s.kind + "|" + s.geo + "|" + s.metric) });
+    idx.forEach((i, k) => { res[i].iso = Math.round(sc[k] * 1000) / 1000; });
+    if (mode === "combined") for (const r of res) {
+      const isoHit = (r.iso || 0) >= IFT;
+      r.unusual = r.absHit || (r.z != null && r.z >= ZT && isoHit) || r.strong;
+    }
     // episodes: >=2 consecutive unusual days, or a single strong day
     const eps = []; let cur = null;
     const flush = () => { if (cur && (cur.days.length >= 2 || cur.days.some(d => d.strong))) eps.push(cur); cur = null; };
@@ -103,7 +143,7 @@
       const maxZ = Math.max(...e.days.map(d => d.z ?? 0));
       const sev = maxZ >= 6 || e.days.length >= 5 ? 3 : maxZ >= 4 || e.days.length >= 3 || e.days.some(d => d.absHit) ? 2 : 1;
       return { kind: s.kind, geo: s.geo, metric: s.metric, start: e.days[0].date, end: e.days.at(-1).date, days: e.days.length,
-        peakValue: peak.value, expected: peak.expected, maxZ: Math.round(maxZ * 10) / 10, absHit: e.days.some(d => d.absHit), severity: sev };
+        peakValue: peak.value, expected: peak.expected, maxZ: Math.round(maxZ * 10) / 10, maxIso: Math.max(0, ...e.days.map(d => d.iso || 0)), absHit: e.days.some(d => d.absHit), severity: sev };
     }) };
   }
 
@@ -128,6 +168,6 @@
     for (const e of all) if (e.end >= cutoff) { const r = risk[e.geo]; r.n++; r.level = Math.max(r.level, e.severity); }
     return { episodes: all, risk, lastDate, cutoff };
   }
-  const api = { GOV, canonGeo, parseCSV, parseText, detectKind, toSeries, scoreSeries, analyse };
+  const api = { isolationForest, GOV, canonGeo, parseCSV, parseText, detectKind, toSeries, scoreSeries, analyse };
   if (typeof module !== "undefined") module.exports = api; else root.MS = api;
 })(this);

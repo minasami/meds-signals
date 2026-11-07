@@ -25,3 +25,6 @@ button.ghost{background:#fff;color:var(--acc)}#lang{background:#fff;color:#0b3a6
 table{border-collapse:collapse;width:100%;margin-top:10px;font-size:.92rem}th,td{border-bottom:1px solid #e2e8ee;padding:6px;text-align:start}caption{text-align:start;font-weight:600;padding:4px 0}
 #status{margin-top:8px;font-weight:600}.err{color:var(--l3)}
 [dir=rtl] .fmt{direction:ltr;text-align:left}
+
+.map-legend{background:#fff;padding:6px 8px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.3);font-size:12px;line-height:1.5}
+.map-legend i{display:inline-block;width:14px;height:14px;margin-inline-end:6px;vertical-align:middle;border:1px solid #5b6b7a}

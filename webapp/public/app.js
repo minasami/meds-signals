@@ -6,8 +6,8 @@
     ar: { skip:"تخطَّ إلى المحتوى", tagline:"إشارة مبكرة وليست تشخيصًا", disclaimer:"تعرض هذه الأداة إشارات إحصائية مبكرة من بيانات مجمّعة. هي ليست تشخيصًا ولا نصيحة طبية. في الطوارئ اتصل بالإسعاف 123.",
       upload:"1. تحميل البيانات", uploadHelp:"اختر ملفات CSV أو JSON. تُقرأ الملفات داخل متصفحك فقط، ولا يُرفع أو يُخزَّن أي شيء.", choose:"اختر الملفات (مبيعات الصيدليات، البيئة، أماكن العمل)",
       samples:"تحميل بيانات نموذجية (اصطناعية)", clear:"مسح", formats:"الأعمدة المتوقعة والملفات النموذجية", alerts:"2. التنبيهات",
-      method:"الطريقة: تُقارن كل سلسلة بخط أساس متحرك لـ28 يومًا (الوسيط وMAD) مع تعديل يوم الأسبوع. اليوم غير المعتاد عندما تكون قيمة z ≥ 3، ويحتاج التنبيه يومين متتاليين (أو z ≥ 5 مرة واحدة). وتُنبّه القراءات البيئية أيضًا عند حدود ثابتة (حرارة ≥ 40° م، PM2.5 ≥ 75).",
-      map:"3. خريطة المخاطر (آخر 14 يومًا من البيانات)", l0:"لا إشارة", l1:"مراقبة", l2:"مرتفع", l3:"عالٍ", tableCap:"مستوى الإشارة حسب المنطقة (نسخة نصية من الخريطة)", area:"المنطقة", level:"المستوى", nAlerts:"تنبيهات نشطة",
+      method:"الطريقة: تُقارن كل سلسلة بخط أساس متحرك لـ28 يومًا (الوسيط وMAD) مع تعديل يوم الأسبوع. اليوم غير المعتاد عندما تكون قيمة z ≥ 3، ويحتاج التنبيه يومين متتاليين (أو z ≥ 5 مرة واحدة). وتُنبّه القراءات البيئية أيضًا عند حدود ثابتة (حرارة ≥ 40° م، PM2.5 ≥ 75). ويُؤكَّد اليوم غير المعتاد بكاشف غابة العزل (Isolation Forest) قبل التنبيه، إلا إذا كانت z ≥ 5 أو تجاوز حدًا ثابتًا.",
+      map:"3. خريطة المخاطر (آخر 14 يومًا من البيانات)", mapLegend:"لون المحافظة = الخطر المُجمَّع (z-score + غابة العزل) في آخر 14 يومًا:", l0:"لا إشارة", l1:"مراقبة", l2:"مرتفع", l3:"عالٍ", tableCap:"مستوى الإشارة حسب المنطقة (نسخة نصية من الخريطة)", area:"المنطقة", level:"المستوى", nAlerts:"تنبيهات نشطة",
       advice:"4. نصائح وقائية", ai:"شرح اختياري بالذكاء الاصطناعي", aiHelp:"يُرسل ملخصات التنبيهات فقط (بدون صفوف) إلى نموذج لغوي، عند الضغط فقط.", aiBtn:"اشرح التنبيهات",
       foot:"نموذج أولي لتحدي Future Health. البيانات النموذجية اصطناعية. الخريطة © مساهمو OpenStreetMap." }
   };
@@ -78,6 +78,17 @@
     drawMap();
     $("#aiOut").textContent = "";
   }
+  const RISK_COL = ["#dfe5ea","#f3d36b","#f0a35a","#e07b70"];
+  let legendCtl;
+  function drawLegend() {
+    if (legendCtl) legendCtl.remove();
+    legendCtl = L.control({ position: "bottomright" });
+    legendCtl.onAdd = () => { const d = L.DomUtil.create("div", "map-legend");
+      d.setAttribute("dir", lang === "ar" ? "rtl" : "ltr");
+      d.innerHTML = `<b>${esc(lang === "ar" ? "الخطر المُجمَّع" : "Combined risk")}</b>` + RISK_COL.map((c, i) => `<div><i style="background:${c}"></i>${esc(LV[lang][i])}</div>`).join("") +
+        `<div class="muted">${esc(lang === "ar" ? "z-score + غابة العزل" : "z-score + Isolation Forest")}</div>`; return d; };
+    legendCtl.addTo(map);
+  }
   function drawMap() {
     if (!window.L) return;
     if (!map) {
@@ -96,7 +107,8 @@
     if (layer) layer.remove(); layer = L.layerGroup().addTo(map);
     if (geoLayer) geoLayer.remove();
     if (geo) geoLayer = L.geoJSON(geo, { interactive: false, style: f => { const r = result && result.risk[f.properties.name];
-      return { color: "#5b6b7a", weight: 1, fillColor: r ? ["#dfe5ea","#f3d36b","#f0a35a","#e07b70"][r.level] : "#eef1f4", fillOpacity: r ? .75 : .5 }; } }).addTo(map).bringToBack();
+      return { color: "#5b6b7a", weight: 1, fillColor: r ? RISK_COL[r.level] : "#eef1f4", fillOpacity: r ? .75 : .5 }; } }).addTo(map).bringToBack();
+    drawLegend();
     const tb = $("#riskTable tbody"); tb.innerHTML = "";
     if (!result) { if (geoLayer) map.fitBounds(geoLayer.getBounds()); return; }
     const col = ["#9aa5b1","#e3b505","#e07a00","#c0392b"], pts = [];
@@ -118,11 +130,17 @@
     run();
   }
   $("#files").addEventListener("change", e => readFiles([...e.target.files]));
-  $("#loadSamples").addEventListener("click", async () => {
+  async function loadSamples() {
     status(lang === "ar" ? "جارٍ التحميل…" : "Loading SAMPLE data…");
-    try { for (const n of ["SAMPLE_pharmacy_sales.csv","SAMPLE_environment.csv","SAMPLE_workplace.csv"]) ingest(n, await (await fetch("samples/" + n)).text()); run(); }
+    series = new Map(); coords = {}; loaded = [];
+    try { for (const n of ["SAMPLE_pharmacy_sales.csv","SAMPLE_environment.csv","SAMPLE_workplace.csv"]) {
+        const r = await fetch("/samples/" + n); if (!r.ok) throw new Error(n + ": HTTP " + r.status); ingest(n, await r.text()); } run(); }
     catch (e) { status(e.message, true); }
-  });
+  }
+  $("#loadSamples").addEventListener("click", loadSamples);
+  const qs = new URLSearchParams(location.search);
+  if (qs.get("lang") === "ar") { lang = "ar"; applyLang(); }
+  if (qs.has("samples")) loadSamples();
   $("#clear").addEventListener("click", () => { series = new Map(); coords = {}; loaded = []; result = null; $("#files").value = ""; status(""); render(); });
   $("#lang").addEventListener("click", () => { lang = lang === "en" ? "ar" : "en"; applyLang(); });
   // Optional LLM explanation: only shown if the server reports a key already configured.
@@ -131,7 +149,7 @@
     if (!result) return; const out = $("#aiOut"); out.textContent = "…";
     const summary = result.episodes.slice(0, 15).map(e => ({ geo: e.geo, metric: e.metric, start: e.start, end: e.end, days: e.days, z: e.maxZ, context: e.context || [] }));
     try { const r = await fetch("/api/explain", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lang, alerts: summary }) });
-      const j = await r.json(); out.textContent = j.text || j.error || "No response"; } catch (e) { out.textContent = String(e); }
+      const j = await r.json(); out.textContent = j.text || (lang === "ar" ? "الشرح بالذكاء الاصطناعي غير متاح حاليًا." : (j.error || "AI explanation unavailable.")); } catch (e) { out.textContent = String(e); }
   });
   render();
 })();
