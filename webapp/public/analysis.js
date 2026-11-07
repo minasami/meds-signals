@@ -75,7 +75,7 @@
   /* ---- Isolation Forest (plain JS, deterministic seed). Liu, Ting & Zhou 2008. ---- */
   function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
   const hash = str => { let h = 2166136261; for (const c of String(str)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
-  const cFactor = n => n <= 1 ? 0 : 2 * (Math.log(n - 1) + 0.5772156649) - 2 * (n - 1) / n;
+  const cFactor = n => n <= 1 ? 0 : n === 2 ? 1 : 2 * (Math.log(n - 1) + 0.5772156649) - 2 * (n - 1) / n;
   /** X: array of feature vectors. Returns anomaly score in (0,1] per row (>0.5 = more isolated than average). */
   function isolationForest(X, opt = {}) {
     const T = opt.trees || 100, psi = Math.min(opt.sample || 64, X.length), rand = rng(opt.seed || 1), dim = X[0] ? X[0].length : 0;
@@ -129,7 +129,8 @@
       return [res[i].z, (z3[0] + z3[1] + z3[2]) / 3, res[i].z - (res[i - 1] && res[i - 1].z != null ? res[i - 1].z : 0)]; });
     const sc = isolationForest(X, { seed: hash(s.kind + "|" + s.geo + "|" + s.metric) });
     idx.forEach((i, k) => { res[i].iso = Math.round(sc[k] * 1000) / 1000; });
-    if (mode === "combined") for (const r of res) {
+    // Fewer than 8 scored days: the forest returns zeros and would hide 3<=z<5. Keep z-score-only.
+    if (mode === "combined" && X.length >= 8) for (const r of res) {
       const isoHit = (r.iso || 0) >= IFT;
       r.unusual = r.absHit || (r.z != null && r.z >= ZT && isoHit) || r.strong;
     }

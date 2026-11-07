@@ -7,7 +7,7 @@
       upload:"1. تحميل البيانات", uploadHelp:"اختر ملفات CSV أو JSON. تُقرأ الملفات داخل متصفحك فقط، ولا يُرفع أو يُخزَّن أي شيء.", choose:"اختر الملفات (مبيعات الصيدليات، البيئة، أماكن العمل)",
       samples:"تحميل بيانات نموذجية (اصطناعية)", clear:"مسح", formats:"الأعمدة المتوقعة والملفات النموذجية", alerts:"2. التنبيهات",
       method:"الطريقة: تُقارن كل سلسلة بخط أساس متحرك لـ28 يومًا (الوسيط وMAD) مع تعديل يوم الأسبوع. اليوم غير المعتاد عندما تكون قيمة z ≥ 3، ويحتاج التنبيه يومين متتاليين (أو z ≥ 5 مرة واحدة). وتُنبّه القراءات البيئية أيضًا عند حدود ثابتة (حرارة ≥ 40° م، PM2.5 ≥ 75). ويُؤكَّد اليوم غير المعتاد بكاشف غابة العزل (Isolation Forest) قبل التنبيه، إلا إذا كانت z ≥ 5 أو تجاوز حدًا ثابتًا.",
-      map:"3. خريطة المخاطر (آخر 14 يومًا من البيانات)", mapLegend:"لون المحافظة = الخطر المُجمَّع (z-score + غابة العزل) في آخر 14 يومًا:", l0:"لا إشارة", l1:"مراقبة", l2:"مرتفع", l3:"عالٍ", tableCap:"مستوى الإشارة حسب المنطقة (نسخة نصية من الخريطة)", area:"المنطقة", level:"المستوى", nAlerts:"تنبيهات نشطة",
+      map:"3. خريطة المخاطر (آخر 14 يومًا من البيانات)", mapLegend:"الخطر المُجمَّع", mapLegendNote:"z-score + غابة العزل", l0:"لا إشارة", l1:"مراقبة", l2:"مرتفع", l3:"عالٍ", tableCap:"مستوى الإشارة حسب المنطقة (نسخة نصية من الخريطة)", area:"المنطقة", level:"المستوى", nAlerts:"تنبيهات نشطة",
       advice:"4. نصائح وقائية", ai:"شرح اختياري بالذكاء الاصطناعي", aiHelp:"يُرسل ملخصات التنبيهات فقط (بدون صفوف) إلى نموذج لغوي، عند الضغط فقط.", aiBtn:"اشرح التنبيهات",
       foot:"نموذج أولي لتحدي Future Health. البيانات النموذجية اصطناعية. الخريطة © مساهمو OpenStreetMap." }
   };
@@ -79,14 +79,16 @@
     $("#aiOut").textContent = "";
   }
   const RISK_COL = ["#dfe5ea","#f3d36b","#f0a35a","#e07b70"];
+  const tr = k => (lang === "ar" ? T.ar[k] : EN[k]) || EN[k];
+  document.querySelectorAll(".legend .dot").forEach((el, i) => { if (RISK_COL[i]) el.style.background = RISK_COL[i]; });
   let legendCtl;
   function drawLegend() {
     if (legendCtl) legendCtl.remove();
     legendCtl = L.control({ position: "bottomright" });
     legendCtl.onAdd = () => { const d = L.DomUtil.create("div", "map-legend");
       d.setAttribute("dir", lang === "ar" ? "rtl" : "ltr");
-      d.innerHTML = `<b>${esc(lang === "ar" ? "الخطر المُجمَّع" : "Combined risk")}</b>` + RISK_COL.map((c, i) => `<div><i style="background:${c}"></i>${esc(LV[lang][i])}</div>`).join("") +
-        `<div class="muted">${esc(lang === "ar" ? "z-score + غابة العزل" : "z-score + Isolation Forest")}</div>`; return d; };
+      d.innerHTML = `<b>${esc(tr("mapLegend"))}</b>` + RISK_COL.map((c, i) => `<div><i style="background:${c}"></i>${esc(LV[lang][i])}</div>`).join("") +
+        `<div class="muted">${esc(tr("mapLegendNote"))}</div>`; return d; };
     legendCtl.addTo(map);
   }
   function drawMap() {

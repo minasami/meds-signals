@@ -27,7 +27,7 @@ const EV = [
 function backtest(mode) {
   const eps = MS.analyse(series, { mode }).episodes;
   const tp = eps.filter(e => EV.some(v => v.geos.includes(e.geo) && v.metrics.includes(e.metric) && e.start <= v.to && e.end >= v.from));
-  const caught = EV.flatMap(v => v.geos.map(g => tp.some(e => e.geo === g && v.geos.includes(g) && e.start <= v.to && e.end >= v.from))).filter(Boolean).length;
+  const caught = EV.flatMap(v => v.geos.map(g => tp.some(e => e.geo === g && v.geos.includes(g) && v.metrics.includes(e.metric) && e.start <= v.to && e.end >= v.from))).filter(Boolean).length;
   return { mode, alerts: eps.length, truePositives: tp.length, falseAlarms: eps.length - tp.length,
     precision: +(tp.length / Math.max(1, eps.length)).toFixed(3), eventAreasCaught: caught + "/7" };
 }
