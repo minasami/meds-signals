@@ -1,16 +1,18 @@
 // Optional LLM explanation via the Vercel AI Gateway (AI SDK `generateText`).
-// Auth: optional AI_GATEWAY_API_KEY override, otherwise the Vercel OIDC token so
-// free AI Gateway credits work without an API key. On a deployment the token is
-// the `x-vercel-oidc-token` request header, not `VERCEL_OIDC_TOKEN`. We read that
-// header, then `getVercelOidcToken()` from `@vercel/oidc` (request context, then
-// the env var, including local `vercel env pull`). For the duration of the
-// generation the token is published where the gateway provider looks (request
-// context and `VERCEL_OIDC_TOKEN`) and removed again afterwards.
+// Auth: optional AI_GATEWAY_API_KEY override, otherwise an OIDC token so free
+// AI Gateway credits work without an API key. OIDC is resolved per request, in order:
+// the `x-vercel-oidc-token` header, then `getVercelOidcToken()` from `@vercel/oidc`
+// (request context, and it refreshes an expired local token), then `VERCEL_OIDC_TOKEN`
+// only when that value is a JWT that has not expired.
+// The token is passed into a gateway provider created for that request. Installed
+// `@ai-sdk/gateway` sends `apiKey` as the bearer token and then applies `headers`,
+// so an OIDC token is passed as `apiKey` with `ai-gateway-auth-method: oidc`.
+// Nothing is written to process.env or the runtime request context.
 // Optional EXPLAIN_MODEL (default openai/gpt-4o-mini).
 // Receives alert summaries only (no rows); stores nothing. Degrades gracefully when not configured.
 const MAX_PROMPT = 8000;
 const OIDC_HEADER = "x-vercel-oidc-token";
-const REQ_CONTEXT = Symbol.for("@vercel/request-context");
+const OIDC_AUTH_METHOD = "ai-gateway-auth-method";
 const NOT_CONFIGURED = "AI explanation not configured (set AI_GATEWAY_API_KEY).";
 
 const isAlert = a => Boolean(a) && typeof a === "object" && !Array.isArray(a);
@@ -55,51 +57,51 @@ function apiKey() {
   return String(process.env.AI_GATEWAY_API_KEY || "").trim();
 }
 
+// Local-dev fallback only. Matches @vercel/oidc: expired when exp (seconds) is in the past.
+// A value that is not a JWT, or has no numeric exp, is not usable.
+function unexpiredOidc(token) {
+  const trimmed = String(token || "").trim();
+  const parts = trimmed.split(".");
+  if (parts.length !== 3 || !parts[1]) return "";
+  try {
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - base64.length % 4) % 4);
+    const payload = JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
+    if (!payload || typeof payload.exp !== "number" || !Number.isFinite(payload.exp)) return "";
+    if (payload.exp * 1000 < Date.now()) return "";
+    return trimmed;
+  } catch {
+    return "";
+  }
+}
+
 async function defaultOidcToken() {
   const { getVercelOidcToken } = await import("@vercel/oidc");
   return getVercelOidcToken();
 }
 
-// Credential for this request. API key wins. Otherwise the header, an existing
-// env token, or getVercelOidcToken() (request context / local refresh).
+// Credential for this request only. Nothing here is written back to the process.
 async function resolveAuth(req, getOidcToken) {
   const key = apiKey();
   if (key) return { apiKey: key };
   const fromHeader = headerValue(req, OIDC_HEADER);
   if (fromHeader) return { oidc: fromHeader };
-  const fromEnv = String(process.env.VERCEL_OIDC_TOKEN || "").trim();
-  if (fromEnv) return { oidc: fromEnv };
   try {
     const token = await (getOidcToken || defaultOidcToken)();
     if (typeof token === "string" && token.trim()) return { oidc: token.trim() };
   } catch {
-    // Missing token throws; that is the unconfigured state, not a server error.
+    // Missing or unrefreshable token. Fall through to an unexpired env value.
   }
+  const fromEnv = unexpiredOidc(process.env.VERCEL_OIDC_TOKEN);
+  if (fromEnv) return { oidc: fromEnv };
   return null;
 }
 
-// The AI SDK gateway reads OIDC from the request context, then VERCEL_OIDC_TOKEN.
-// A classic Node function exposes the token on req.headers, which neither check
-// sees, so publish the resolved token for this call only.
-async function withRequestOidc(token, fn) {
-  const hadEnv = Object.prototype.hasOwnProperty.call(process.env, "VERCEL_OIDC_TOKEN");
-  const prevEnv = process.env.VERCEL_OIDC_TOKEN;
-  process.env.VERCEL_OIDC_TOKEN = token;
-  const prevCtx = globalThis[REQ_CONTEXT];
-  globalThis[REQ_CONTEXT] = {
-    get() {
-      const base = typeof prevCtx?.get === "function" ? (prevCtx.get() || {}) : {};
-      return { ...base, headers: { ...(base.headers || {}), [OIDC_HEADER]: token } };
-    }
-  };
-  try {
-    return await fn();
-  } finally {
-    if (hadEnv) process.env.VERCEL_OIDC_TOKEN = prevEnv;
-    else delete process.env.VERCEL_OIDC_TOKEN;
-    if (prevCtx === undefined) delete globalThis[REQ_CONTEXT];
-    else globalThis[REQ_CONTEXT] = prevCtx;
-  }
+// One provider per call. `headers` override the api-key auth method the SDK sets
+// whenever `apiKey` is passed (see getGatewayAuthToken in @ai-sdk/gateway).
+function gatewayOptions(auth) {
+  if (auth.apiKey) return { apiKey: auth.apiKey };
+  return { apiKey: auth.oidc, headers: { [OIDC_AUTH_METHOD]: "oidc" } };
 }
 
 function parseBody(req) {
@@ -130,15 +132,12 @@ export function createHandler({ loadAi = () => import("ai"), getOidcToken } = {}
       const prompt = buildPrompt(lang, prepareAlerts(parsed.body.alerts));
       const modelId = process.env.EXPLAIN_MODEL || "openai/gpt-4o-mini";
       const ai = await loadAi();
-      const call = model => ai.generateText({
-        model,
+      const { text } = await ai.generateText({
+        model: ai.createGateway(gatewayOptions(auth))(modelId),
         prompt,
         maxOutputTokens: 400,
         abortSignal: AbortSignal.timeout(20000)
       });
-      const { text } = auth.apiKey
-        ? await call(ai.createGateway({ apiKey: auth.apiKey })(modelId))
-        : await withRequestOidc(auth.oidc, () => call(modelId));
       return res.status(200).json({ enabled: true, text: text || null });
     } catch (e) {
       console.error("explain failed:", e && e.name); // never log keys or payloads
