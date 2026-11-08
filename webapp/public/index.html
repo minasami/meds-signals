@@ -42,7 +42,7 @@
 
   <section aria-labelledby="h-al" class="card">
     <h2 id="h-al" data-i18n="alerts">2. Alerts</h2>
-    <p class="muted" data-i18n="method">Method: each series is compared with a robust trailing 28-day baseline (median and MAD) adjusted for day of week. A day is unusual when its robust z-score is ≥ 3; an alert needs 2 consecutive unusual days (or z ≥ 5 once). Environmental readings also alert on fixed thresholds (temperature ≥ 40 °C, PM2.5 ≥ 75 µg/m³).</p>
+    <p class="muted" data-i18n="method">Method: each series is compared with a robust trailing 28-day baseline (median and MAD) adjusted for day of week. A day is unusual when its robust z-score is ≥ 3; an alert needs 2 consecutive unusual days (or z ≥ 5 once). Environmental readings also alert on fixed thresholds (temperature ≥ 40 °C, PM2.5 ≥ 75 µg/m³). Each unusual day must also be confirmed by a plain-JS Isolation Forest (100 trees, fixed seed) unless z ≥ 5 or a fixed threshold is hit.</p>
     <div id="alerts" class="grid"></div>
   </section>
 
@@ -50,7 +50,7 @@
     <h2 id="h-map" data-i18n="map">3. Risk map (last 14 days of data)</h2>
     <p id="tileNote" class="muted" role="status" hidden>The background map could not load. Markers and the table below still show each area's signal level.</p>
     <div id="map" role="region" aria-label="Map of governorate signal levels"></div>
-    <p class="legend"><span class="dot l0"></span><span data-i18n="l0">no signal</span> <span class="dot l1"></span><span data-i18n="l1">watch</span> <span class="dot l2"></span><span data-i18n="l2">elevated</span> <span class="dot l3"></span><span data-i18n="l3">high</span></p>
+    <p class="legend"><b data-i18n="mapLegend">Combined risk</b> <span class="dot risk0"></span><span data-i18n="l0">no signal</span> <span class="dot risk1"></span><span data-i18n="l1">watch</span> <span class="dot risk2"></span><span data-i18n="l2">elevated</span> <span class="dot risk3"></span><span data-i18n="l3">high</span> <span class="muted" data-i18n="mapLegendNote">z-score + Isolation Forest</span></p>
     <table id="riskTable" class="sr-table"><caption data-i18n="tableCap">Signal level by area (text version of the map)</caption><thead><tr><th data-i18n="area">Area</th><th data-i18n="level">Level</th><th data-i18n="nAlerts">Active alerts</th></tr></thead><tbody></tbody></table>
   </section>
 
