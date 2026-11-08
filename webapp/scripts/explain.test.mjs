@@ -3,7 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import { createHandler, prepareAlerts, buildPrompt, MAX_PROMPT, default as handler } from "../api/explain.mjs";
 
 const REQ_CONTEXT = Symbol.for("@vercel/request-context");
-const ENV_KEYS = ["AI_GATEWAY_API_KEY", "VERCEL_OIDC_TOKEN", "EXPLAIN_MODEL"];
+const ENV_KEYS = ["AI_GATEWAY_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "VERCEL_OIDC_TOKEN", "EXPLAIN_MODEL"];
 const NOT_CONFIGURED = "AI explanation not configured (set AI_GATEWAY_API_KEY).";
 
 function jwt(payload) {
@@ -449,6 +449,196 @@ describe("explain api", { concurrency: false }, () => {
     assert.ok(prompt.startsWith("You explain public-health"));
     const arabic = buildPrompt("ar", []);
     assert.match(arabic, /Arabic/);
+  });
+
+  it("uses a per-request Gemini provider when GOOGLE_GENERATIVE_AI_API_KEY is set", async () => {
+    clearAuth();
+    const runtime = { id: "als" };
+    globalThis[REQ_CONTEXT] = runtime;
+    let gatewayCalls = 0;
+    let oidcCalls = 0;
+    let waiting = 0;
+    let markWaiting;
+    const bothWaiting = new Promise(resolve => { markWaiting = resolve; });
+    let releaseA;
+    let releaseB;
+    const gateA = new Promise(resolve => { releaseA = resolve; });
+    const gateB = new Promise(resolve => { releaseB = resolve; });
+    const providers = [];
+
+    const explain = createHandler({
+      getOidcToken: async () => { oidcCalls += 1; return liveToken; },
+      loadGoogle: async () => ({
+        createGoogleGenerativeAI(opts) {
+          const provider = model => ({ provider: "google", modelId: model, apiKey: opts.apiKey });
+          providers.push(provider);
+          return provider;
+        }
+      }),
+      loadAi: async () => ({
+        createGateway() { gatewayCalls += 1; throw new Error("gateway must not run when Gemini is configured"); },
+        async generateText(args) {
+          const own = args.model.apiKey;
+          waiting += 1;
+          if (waiting === 2) markWaiting();
+          await (own === "key-a" ? gateA : gateB);
+          assert.equal(args.model.apiKey, own);
+          assert.equal(args.model.provider, "google");
+          assert.equal(args.model.modelId, "gemini-2.5-flash");
+          assert.equal(args.maxOutputTokens, 400);
+          assert.equal(globalThis[REQ_CONTEXT], runtime);
+          return { text: own };
+        }
+      })
+    });
+
+    const enabled = mockRes();
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "key-a";
+    process.env.AI_GATEWAY_API_KEY = "gateway-key";
+    await explain({ method: "GET", headers: { "x-vercel-oidc-token": liveToken } }, enabled);
+    assert.deepEqual(enabled.body, { enabled: true });
+    assert.equal(oidcCalls, 0);
+
+    const bad = mockRes();
+    await explain({ method: "POST", body: "{", headers: {} }, bad);
+    assert.equal(bad.statusCode, 400);
+    assert.equal(bad.body.error, "Invalid JSON.");
+
+    const resA = mockRes();
+    const pendingA = explain({
+      method: "POST",
+      headers: { "x-vercel-oidc-token": liveToken },
+      body: { alerts: [] }
+    }, resA);
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "key-b";
+    const resB = mockRes();
+    const pendingB = explain({ method: "POST", headers: {}, body: { alerts: [] } }, resB);
+
+    await bothWaiting;
+    releaseB();
+    await pendingB;
+    assert.equal(resB.statusCode, 200);
+    assert.equal(resB.body.text, "key-b");
+    assert.equal(resA.body, undefined);
+
+    releaseA();
+    await pendingA;
+    assert.equal(resA.statusCode, 200);
+    assert.equal(resA.body.text, "key-a");
+    assert.equal(gatewayCalls, 0);
+    assert.equal(oidcCalls, 0);
+    assert.equal(providers.length, 2);
+    assert.equal(providers[0] === providers[1], false);
+    assert.equal(globalThis[REQ_CONTEXT], runtime);
+    assert.equal(process.env.AI_GATEWAY_API_KEY, "gateway-key");
+    assert.equal(process.env.VERCEL_OIDC_TOKEN, undefined);
+
+    delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    process.env.EXPLAIN_MODEL = "gemini-2.0-flash";
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "key-c";
+    let customModel = "";
+    const custom = createHandler({
+      loadGoogle: async () => ({
+        createGoogleGenerativeAI(opts) {
+          assert.equal(opts.apiKey, "key-c");
+          return model => ({ modelId: model, apiKey: opts.apiKey });
+        }
+      }),
+      loadAi: async () => ({
+        async generateText(args) {
+          customModel = args.model.modelId;
+          return { text: "custom" };
+        }
+      })
+    });
+    const customRes = mockRes();
+    await custom({ method: "POST", body: { alerts: [] }, headers: {} }, customRes);
+    assert.equal(customRes.body.text, "custom");
+    assert.equal(customModel, "gemini-2.0-flash");
+  });
+
+  it("logs the provider status on failure and not the key or response body", async () => {
+    clearAuth();
+    const secret = "AIza-gemini-secret";
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = secret;
+    const logs = [];
+    const original = console.error;
+    console.error = (...args) => { logs.push(args); };
+    try {
+      const explain = createHandler({
+        loadGoogle: async () => ({
+          createGoogleGenerativeAI(opts) {
+            return model => ({ modelId: model, apiKey: opts.apiKey });
+          }
+        }),
+        loadAi: async () => ({
+          async generateText(args) {
+            const error = new Error("provider said " + args.model.apiKey);
+            error.name = "AI_APICallError";
+            error.responseBody = args.model.apiKey;
+            error.cause = { statusCode: 429, message: args.model.apiKey };
+            throw error;
+          }
+        })
+      });
+      const res = mockRes();
+      await explain({ method: "POST", body: { alerts: [] }, headers: {} }, res);
+      assert.equal(res.statusCode, 500);
+      assert.deepEqual(res.body, { enabled: true, text: null, error: "AI explanation temporarily unavailable." });
+      assert.deepEqual(logs, [["explain failed:", "AI_APICallError", 429]]);
+      assert.equal(JSON.stringify(logs).includes(secret), false);
+    } finally {
+      console.error = original;
+    }
+  });
+
+  it("the installed Google provider sends only that request's API key", async () => {
+    clearAuth();
+    const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
+    const { generateText } = await import("ai");
+    const sent = [];
+    const explain = createHandler({
+      getOidcToken: async () => { throw new Error("no oidc"); },
+      loadGoogle: async () => ({
+        createGoogleGenerativeAI(opts) {
+          return createGoogleGenerativeAI({
+            ...opts,
+            fetch: async (_url, init) => {
+              sent.push(new Headers(init.headers).get("x-goog-api-key"));
+              return new Response(JSON.stringify({ error: { message: "stopped" } }), {
+                status: 400,
+                headers: { "content-type": "application/json" }
+              });
+            }
+          });
+        }
+      }),
+      loadAi: async () => ({
+        createGateway() { throw new Error("gateway must not run"); },
+        generateText
+      })
+    });
+    const logs = [];
+    const original = console.error;
+    console.error = (...args) => { logs.push(args); };
+    try {
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY = "gemini-key-a";
+      const resA = mockRes();
+      const pendingA = explain({ method: "POST", body: { alerts: [] }, headers: {} }, resA);
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY = "gemini-key-b";
+      const resB = mockRes();
+      const pendingB = explain({ method: "POST", body: { alerts: [] }, headers: {} }, resB);
+      await Promise.all([pendingA, pendingB]);
+      assert.equal(resA.statusCode, 500);
+      assert.equal(resB.statusCode, 500);
+      assert.deepEqual(sent.slice().sort(), ["gemini-key-a", "gemini-key-b"]);
+      const flat = JSON.stringify(logs);
+      assert.equal(flat.includes("gemini-key-a"), false);
+      assert.equal(flat.includes("gemini-key-b"), false);
+      assert.match(flat, /400/);
+    } finally {
+      console.error = original;
+    }
   });
 
   it("rejects methods other than GET and POST", async () => {
