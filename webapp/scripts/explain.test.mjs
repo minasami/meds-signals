@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { createHandler, prepareAlerts, buildPrompt, MAX_PROMPT, default as handler } from "../api/explain.mjs";
+import fs from "node:fs";
+import { createHandler, prepareAlerts, buildPrompt, MAX_PROMPT, config, default as handler } from "../api/explain.mjs";
 
 const REQ_CONTEXT = Symbol.for("@vercel/request-context");
 const ENV_KEYS = ["AI_GATEWAY_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "VERCEL_OIDC_TOKEN", "EXPLAIN_MODEL"];
@@ -453,6 +454,10 @@ describe("explain api", { concurrency: false }, () => {
 
   it("uses a per-request Gemini provider when GOOGLE_GENERATIVE_AI_API_KEY is set", async () => {
     clearAuth();
+    const originalTimeout = AbortSignal.timeout;
+    const geminiTimeouts = [];
+    AbortSignal.timeout = ms => { geminiTimeouts.push(ms); return originalTimeout.call(AbortSignal, ms); };
+    try {
     const runtime = { id: "als" };
     globalThis[REQ_CONTEXT] = runtime;
     let gatewayCalls = 0;
@@ -484,8 +489,9 @@ describe("explain api", { concurrency: false }, () => {
           await (own === "key-a" ? gateA : gateB);
           assert.equal(args.model.apiKey, own);
           assert.equal(args.model.provider, "google");
-          assert.equal(args.model.modelId, "gemini-2.5-flash");
+          assert.equal(args.model.modelId, "gemini-flash-latest");
           assert.equal(args.maxOutputTokens, 400);
+          assert.equal(geminiTimeouts.at(-1), 25000);
           assert.equal(globalThis[REQ_CONTEXT], runtime);
           return { text: own };
         }
@@ -555,6 +561,11 @@ describe("explain api", { concurrency: false }, () => {
     await custom({ method: "POST", body: { alerts: [] }, headers: {} }, customRes);
     assert.equal(customRes.body.text, "custom");
     assert.equal(customModel, "gemini-2.0-flash");
+    assert.ok(geminiTimeouts.length >= 1);
+    assert.ok(geminiTimeouts.every(ms => ms === 25000));
+    } finally {
+      AbortSignal.timeout = originalTimeout;
+    }
   });
 
   it("logs the provider status on failure and not the key or response body", async () => {
@@ -639,6 +650,12 @@ describe("explain api", { concurrency: false }, () => {
     } finally {
       console.error = original;
     }
+  });
+
+  it("allows api/explain to run for at least 30 seconds", () => {
+    assert.ok(config.maxDuration >= 30);
+    const vercel = JSON.parse(fs.readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
+    assert.ok(vercel.functions["api/explain.mjs"].maxDuration >= 30);
   });
 
   it("rejects methods other than GET and POST", async () => {

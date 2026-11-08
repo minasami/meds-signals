@@ -6,7 +6,7 @@ Static site (no framework). Upload aggregated pharmacy-sales, environment and wo
 
 - `public/` — app (`index.html`, `app.js`, `analysis.js`), SAMPLE (synthetic) files in `public/samples/`
 - `api/explain.mjs` — optional LLM explanation (`generateText`). Env:
-  - `GOOGLE_GENERATIVE_AI_API_KEY` — use Google Gemini. Each request calls `createGoogleGenerativeAI({ apiKey })` from `@ai-sdk/google`. `EXPLAIN_MODEL` defaults to `gemini-2.5-flash` (free tier).
+  - `GOOGLE_GENERATIVE_AI_API_KEY` — use Google Gemini. Each request calls `createGoogleGenerativeAI({ apiKey })` from `@ai-sdk/google`. `EXPLAIN_MODEL` defaults to `gemini-flash-latest`. The Gemini call waits up to 25s; `api/explain` allows 30s.
   - Otherwise Vercel AI Gateway: `AI_GATEWAY_API_KEY`, or the `x-vercel-oidc-token` header, then `@vercel/oidc` `getVercelOidcToken()`, then an unexpired `VERCEL_OIDC_TOKEN`. `EXPLAIN_MODEL` defaults to `openai/gpt-4o-mini`.
   - Without a Google key, gateway key, or token, `GET /api/explain` returns `{enabled:false}` and the AI box stays hidden.
 - Detection: robust z-score (28-day, day-of-week) confirmed by a plain-JS Isolation Forest (`MS.isolationForest`); `analyse(series, {mode:"z"})` reproduces z-only.

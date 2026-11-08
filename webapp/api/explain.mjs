@@ -1,7 +1,7 @@
 // Optional LLM explanation (AI SDK `generateText`).
 // If GOOGLE_GENERATIVE_AI_API_KEY is set, each request builds its own
 // @ai-sdk/google provider with createGoogleGenerativeAI({ apiKey }) and calls
-// EXPLAIN_MODEL or gemini-2.5-flash (free tier). Otherwise the Vercel AI Gateway:
+// EXPLAIN_MODEL or gemini-flash-latest. Otherwise the Vercel AI Gateway:
 // AI_GATEWAY_API_KEY, then the `x-vercel-oidc-token` header, then
 // getVercelOidcToken() from @vercel/oidc (it refreshes an expired local token),
 // then VERCEL_OIDC_TOKEN only when that JWT has not expired. EXPLAIN_MODEL
@@ -11,8 +11,10 @@
 // Nothing is written to process.env or the runtime request context.
 // Receives alert summaries only (no rows); stores nothing. Degrades gracefully when not configured.
 const MAX_PROMPT = 8000;
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-flash-latest";
 const GATEWAY_MODEL = "openai/gpt-4o-mini";
+const GEMINI_TIMEOUT_MS = 25000;
+const GATEWAY_TIMEOUT_MS = 20000;
 const OIDC_HEADER = "x-vercel-oidc-token";
 const OIDC_AUTH_METHOD = "ai-gateway-auth-method";
 const NOT_CONFIGURED = "AI explanation not configured (set AI_GATEWAY_API_KEY).";
@@ -173,7 +175,7 @@ export function createHandler({
         model,
         prompt,
         maxOutputTokens: 400,
-        abortSignal: AbortSignal.timeout(20000)
+        abortSignal: AbortSignal.timeout(googleKey ? GEMINI_TIMEOUT_MS : GATEWAY_TIMEOUT_MS)
       });
       return res.status(200).json({ enabled: true, text: text || null });
     } catch (e) {
@@ -183,5 +185,6 @@ export function createHandler({
   };
 }
 
+export const config = { maxDuration: 30 };
 export { MAX_PROMPT };
 export default createHandler();
