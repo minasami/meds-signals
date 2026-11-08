@@ -1,16 +1,20 @@
-// Optional LLM explanation via the Vercel AI Gateway (AI SDK `generateText`).
-// Auth: optional AI_GATEWAY_API_KEY override, otherwise an OIDC token so free
-// AI Gateway credits work without an API key. OIDC is resolved per request, in order:
-// the `x-vercel-oidc-token` header, then `getVercelOidcToken()` from `@vercel/oidc`
-// (request context, and it refreshes an expired local token), then `VERCEL_OIDC_TOKEN`
-// only when that value is a JWT that has not expired.
-// The token is passed into a gateway provider created for that request. Installed
-// `@ai-sdk/gateway` sends `apiKey` as the bearer token and then applies `headers`,
-// so an OIDC token is passed as `apiKey` with `ai-gateway-auth-method: oidc`.
+// Optional LLM explanation (AI SDK `generateText`).
+// If GOOGLE_GENERATIVE_AI_API_KEY is set, each request builds its own
+// @ai-sdk/google provider with createGoogleGenerativeAI({ apiKey }) and calls
+// EXPLAIN_MODEL or gemini-flash-latest. Otherwise the Vercel AI Gateway:
+// AI_GATEWAY_API_KEY, then the `x-vercel-oidc-token` header, then
+// getVercelOidcToken() from @vercel/oidc (it refreshes an expired local token),
+// then VERCEL_OIDC_TOKEN only when that JWT has not expired. EXPLAIN_MODEL
+// defaults to openai/gpt-4o-mini on the gateway path.
+// Installed @ai-sdk/gateway sends apiKey as the bearer token and then applies
+// headers, so an OIDC token is passed as apiKey with ai-gateway-auth-method: oidc.
 // Nothing is written to process.env or the runtime request context.
-// Optional EXPLAIN_MODEL (default openai/gpt-4o-mini).
 // Receives alert summaries only (no rows); stores nothing. Degrades gracefully when not configured.
 const MAX_PROMPT = 8000;
+const GEMINI_MODEL = "gemini-flash-latest";
+const GATEWAY_MODEL = "openai/gpt-4o-mini";
+const GEMINI_TIMEOUT_MS = 25000;
+const GATEWAY_TIMEOUT_MS = 20000;
 const OIDC_HEADER = "x-vercel-oidc-token";
 const OIDC_AUTH_METHOD = "ai-gateway-auth-method";
 const NOT_CONFIGURED = "AI explanation not configured (set AI_GATEWAY_API_KEY).";
@@ -55,6 +59,14 @@ function headerValue(req, name) {
 
 function apiKey() {
   return String(process.env.AI_GATEWAY_API_KEY || "").trim();
+}
+
+function googleApiKey() {
+  return String(process.env.GOOGLE_GENERATIVE_AI_API_KEY || "").trim();
+}
+
+function modelId(fallback) {
+  return process.env.EXPLAIN_MODEL || fallback;
 }
 
 // Local-dev fallback only. Matches @vercel/oidc: expired when exp (seconds) is in the past.
@@ -104,6 +116,24 @@ function gatewayOptions(auth) {
   return { apiKey: auth.oidc, headers: { [OIDC_AUTH_METHOD]: "oidc" } };
 }
 
+// Numeric HTTP status only. Never read message, url, or response bodies: providers echo keys there.
+function httpStatus(error) {
+  for (const current of [error, error && error.cause]) {
+    if (!current || typeof current !== "object") continue;
+    for (const field of ["statusCode", "status"]) {
+      const value = current[field];
+      if (typeof value === "number" && Number.isInteger(value) && value >= 100 && value <= 599) return value;
+    }
+  }
+  return undefined;
+}
+
+function logFailure(error) {
+  const status = httpStatus(error);
+  if (status == null) console.error("explain failed:", error && error.name);
+  else console.error("explain failed:", error && error.name, status);
+}
+
 function parseBody(req) {
   let body = req.body;
   if (typeof body === "string") {
@@ -115,9 +145,16 @@ function parseBody(req) {
   return { body };
 }
 
-export function createHandler({ loadAi = () => import("ai"), getOidcToken } = {}) {
+export function createHandler({
+  loadAi = () => import("ai"),
+  loadGoogle = () => import("@ai-sdk/google"),
+  getOidcToken
+} = {}) {
   return async function handler(req, res) {
+    // Captured before any await so overlapping requests keep the key they started with.
+    const googleKey = googleApiKey();
     if (req.method === "GET") {
+      if (googleKey) return res.status(200).json({ enabled: true });
       const auth = await resolveAuth(req, getOidcToken);
       return res.status(200).json({ enabled: Boolean(auth) });
     }
@@ -125,26 +162,29 @@ export function createHandler({ loadAi = () => import("ai"), getOidcToken } = {}
     // Reject malformed input even when AI is not configured.
     const parsed = parseBody(req);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
-    const auth = await resolveAuth(req, getOidcToken);
-    if (!auth) return res.status(200).json({ enabled: false, text: null, error: NOT_CONFIGURED });
+    const auth = googleKey ? null : await resolveAuth(req, getOidcToken);
+    if (!googleKey && !auth) return res.status(200).json({ enabled: false, text: null, error: NOT_CONFIGURED });
     try {
       const lang = parsed.body.lang === "ar" ? "ar" : "en";
       const prompt = buildPrompt(lang, prepareAlerts(parsed.body.alerts));
-      const modelId = process.env.EXPLAIN_MODEL || "openai/gpt-4o-mini";
       const ai = await loadAi();
+      const model = googleKey
+        ? (await loadGoogle()).createGoogleGenerativeAI({ apiKey: googleKey })(modelId(GEMINI_MODEL))
+        : ai.createGateway(gatewayOptions(auth))(modelId(GATEWAY_MODEL));
       const { text } = await ai.generateText({
-        model: ai.createGateway(gatewayOptions(auth))(modelId),
+        model,
         prompt,
         maxOutputTokens: 400,
-        abortSignal: AbortSignal.timeout(20000)
+        abortSignal: AbortSignal.timeout(googleKey ? GEMINI_TIMEOUT_MS : GATEWAY_TIMEOUT_MS)
       });
       return res.status(200).json({ enabled: true, text: text || null });
     } catch (e) {
-      console.error("explain failed:", e && e.name); // never log keys or payloads
+      logFailure(e);
       return res.status(500).json({ enabled: true, text: null, error: "AI explanation temporarily unavailable." });
     }
   };
 }
 
+export const config = { maxDuration: 30 };
 export { MAX_PROMPT };
 export default createHandler();
